@@ -1,0 +1,37 @@
+name: game_trader_app
+description: "A new Flutter project."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  google_fonts: ^8.0.2
+  provider: ^6.1.2
+
+  # HTTP client for API calls
+  http: ^1.2.0
+
+  # Secure storage for tokens
+  flutter_secure_storage: ^9.2.2
+
+  # Shared preferences for non-sensitive local storage
+  shared_preferences: ^2.3.3
+
+  # WebSocket support
+  web_socket_channel: ^3.0.1
+  uuid: ^4.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

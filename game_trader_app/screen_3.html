@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Games Lobby Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                    },
+                    fontFamily: {
+                        "display": ["Plus Jakarta Sans"]
+                    },
+                    borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .glass-nav {
+            background: rgba(16, 25, 34, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .game-card-glow:active {
+            transform: scale(0.98);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen pb-32">
+<!-- Header Section -->
+<header class="sticky top-0 z-50 glass-nav border-b border-primary/10 px-4 py-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
+<span class="material-symbols-outlined text-primary">person</span>
+</div>
+<div>
+<p class="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Total Balance</p>
+<h2 class="text-xl font-extrabold tracking-tight">$12,450.00</h2>
+</div>
+</div>
+<button class="bg-primary hover:bg-primary/90 text-white px-5 py-2 rounded-full font-bold text-sm transition-all shadow-lg shadow-primary/20 flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">add_circle</span>
+                Deposit
+            </button>
+</div>
+</header>
+<!-- Promotional Scroller -->
+<section class="mt-4 px-4">
+<div class="flex overflow-x-auto gap-3 hide-scrollbar py-2">
+<div class="flex-none w-72 h-36 rounded-2xl bg-gradient-to-br from-primary to-blue-600 p-5 relative overflow-hidden group">
+<div class="relative z-10 h-full flex flex-col justify-between">
+<span class="bg-white/20 backdrop-blur-md text-[10px] font-bold px-2 py-1 rounded-full w-fit">TOURNAMENT LIVE</span>
+<div>
+<h3 class="font-bold text-lg">Neon Master Series</h3>
+<p class="text-xs text-white/80">Win your share of $50,000</p>
+</div>
+</div>
+<div class="absolute -right-4 -bottom-4 opacity-20">
+<span class="material-symbols-outlined !text-9xl">trophy</span>
+</div>
+</div>
+<div class="flex-none w-72 h-36 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 p-5 relative overflow-hidden">
+<div class="relative z-10 h-full flex flex-col justify-between">
+<span class="bg-white/20 backdrop-blur-md text-[10px] font-bold px-2 py-1 rounded-full w-fit">BONUS</span>
+<div>
+<h3 class="font-bold text-lg">Daily Win Streak</h3>
+<p class="text-xs text-white/80">5 wins in a row = 20% bonus</p>
+</div>
+</div>
+<div class="absolute -right-4 -bottom-4 opacity-20">
+<span class="material-symbols-outlined !text-9xl">bolt</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Filter Chips -->
+<nav class="mt-6 px-4">
+<div class="flex gap-2 overflow-x-auto hide-scrollbar">
+<button class="flex-none px-5 py-2 rounded-full bg-primary text-white text-xs font-bold">All Games</button>
+<button class="flex-none px-5 py-2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold">Instant Win</button>
+<button class="flex-none px-5 py-2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold">High Volatility</button>
+<button class="flex-none px-5 py-2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold">Strategy</button>
+</div>
+</nav>
+<!-- Games Grid -->
+<main class="mt-6 px-4 space-y-6">
+<div class="flex items-center justify-between">
+<h3 class="text-lg font-bold">Featured Trading Games</h3>
+<span class="text-primary text-xs font-bold">See All</span>
+</div>
+<div class="grid grid-cols-1 gap-4">
+<!-- Game Card 1: Neon Rise -->
+<div class="relative h-48 rounded-2xl overflow-hidden group game-card-glow transition-transform bg-slate-800">
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10"></div>
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&amp;w=800&amp;auto=format&amp;fit=crop')] bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Cyberpunk neon abstract geometric city landscape"></div>
+<div class="absolute bottom-0 left-0 right-0 p-5 z-20 flex justify-between items-end">
+<div>
+<span class="text-[10px] font-black text-primary uppercase tracking-tighter bg-primary/20 px-2 py-1 rounded mb-2 inline-block">RISE/FALL</span>
+<h4 class="text-2xl font-black italic tracking-tighter">NEON RISE</h4>
+<p class="text-xs text-slate-300">Predict market peaks and valleys</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-slate-400 font-bold uppercase">WIN UP TO</p>
+<p class="text-xl font-black text-green-400">95%</p>
+</div>
+</div>
+</div>
+<!-- Game Card 2: Edge Runner -->
+<div class="relative h-48 rounded-2xl overflow-hidden group game-card-glow transition-transform bg-slate-800">
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10"></div>
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&amp;w=800&amp;auto=format&amp;fit=crop')] bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Retro synthwave high speed road glowing lines"></div>
+<div class="absolute bottom-0 left-0 right-0 p-5 z-20 flex justify-between items-end">
+<div>
+<span class="text-[10px] font-black text-purple-400 uppercase tracking-tighter bg-purple-400/20 px-2 py-1 rounded mb-2 inline-block">TOUCH/NO TOUCH</span>
+<h4 class="text-2xl font-black italic tracking-tighter">EDGE RUNNER</h4>
+<p class="text-xs text-slate-300">Hit the barrier before time runs out</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-slate-400 font-bold uppercase">WIN UP TO</p>
+<p class="text-xl font-black text-green-400">350%</p>
+</div>
+</div>
+</div>
+<!-- Game Card 3: Digit Dash -->
+<div class="relative h-48 rounded-2xl overflow-hidden group game-card-glow transition-transform bg-slate-800">
+<div class="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10"></div>
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?q=80&amp;w=800&amp;auto=format&amp;fit=crop')] bg-cover bg-center group-hover:scale-105 transition-transform duration-500" data-alt="Digital glitch matrix style numeric patterns"></div>
+<div class="absolute bottom-0 left-0 right-0 p-5 z-20 flex justify-between items-end">
+<div>
+<span class="text-[10px] font-black text-blue-400 uppercase tracking-tighter bg-blue-400/20 px-2 py-1 rounded mb-2 inline-block">MATCHES/DIFFERS</span>
+<h4 class="text-2xl font-black italic tracking-tighter">DIGIT DASH</h4>
+<p class="text-xs text-slate-300">Match the last tick digit for high payout</p>
+</div>
+<div class="text-right">
+<p class="text-[10px] text-slate-400 font-bold uppercase">WIN UP TO</p>
+<p class="text-xl font-black text-green-400">900%</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Live Win Feed Ticker (Floating above Bottom Nav) -->
+<div class="fixed bottom-24 left-0 right-0 z-40 px-4">
+<div class="bg-slate-900/90 border border-primary/20 backdrop-blur-md rounded-full px-4 py-2 flex items-center gap-3 overflow-hidden">
+<div class="flex-none flex items-center gap-1">
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+</span>
+<span class="text-[10px] font-bold text-slate-400 uppercase">Live Feed</span>
+</div>
+<div class="flex-1 whitespace-nowrap overflow-hidden">
+<p class="text-xs font-medium animate-marquee">
+<span class="text-primary font-bold">@User_882</span> just won <span class="text-green-400 font-bold">$142.50</span> in <span class="italic font-bold">Neon Rise</span> • <span class="text-primary font-bold">@TraderJoe</span> won <span class="text-green-400 font-bold">$22.00</span> in <span class="italic font-bold">Digit Dash</span> • <span class="text-primary font-bold">@MarketPro</span> hit <span class="text-green-400 font-bold">$1,200.00</span> payout!
+                </p>
+</div>
+</div>
+</div>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 right-0 z-50 glass-nav border-t border-primary/10 px-6 pt-3 pb-8">
+<div class="flex justify-between items-center max-w-md mx-auto">
+<a class="flex flex-col items-center gap-1 group" href="#">
+<div class="size-10 rounded-full bg-primary flex items-center justify-center text-white">
+<span class="material-symbols-outlined font-variation-fill">sports_esports</span>
+</div>
+<p class="text-[10px] font-bold text-primary">Lobby</p>
+</a>
+<a class="flex flex-col items-center gap-1 group" href="#">
+<div class="size-10 rounded-full flex items-center justify-center text-slate-500 group-hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined">work</span>
+</div>
+<p class="text-[10px] font-bold text-slate-500">Portfolio</p>
+</a>
+<a class="flex flex-col items-center gap-1 group" href="#">
+<div class="size-10 rounded-full flex items-center justify-center text-slate-500 group-hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined">leaderboard</span>
+</div>
+<p class="text-[10px] font-bold text-slate-500">Ranks</p>
+</a>
+<a class="flex flex-col items-center gap-1 group" href="#">
+<div class="size-10 rounded-full flex items-center justify-center text-slate-500 group-hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</div>
+<p class="text-[10px] font-bold text-slate-500">Settings</p>
+</a>
+</div>
+</nav>
+<style>
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+            display: inline-block;
+            animation: marquee 20s linear infinite;
+            padding-left: 100%;
+        }
+    </style>
+</body></html>
