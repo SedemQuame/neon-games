@@ -280,7 +280,7 @@ func (h *Handler) InitiateMoMoWithdrawal(c *fiber.Ctx) error {
 		AmountMinor:   toMinorUnits(body.Amount),
 		Currency:      h.cfg.PaystackDefaultCurrency,
 		RecipientCode: recipient.RecipientCode,
-		Reason:        "GameHub Wallet Withdrawal",
+		Reason:        "Glory Grid Wallet Withdrawal",
 	})
 	if err != nil {
 		h.walletClient.ReleaseWithdrawal(context.Background(), userID, withdrawalID, false)

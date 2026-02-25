@@ -13,7 +13,7 @@ import (
 // ErrMissingToken signals that no bearer token was supplied.
 var ErrMissingToken = errors.New("missing bearer token")
 
-// Claims captures the minimal fields we expect on GameHub access tokens.
+// Claims captures the minimal fields we expect on Glory Grid access tokens.
 type Claims struct {
 	UserID string `json:"uid"`
 	Role   string `json:"role"`

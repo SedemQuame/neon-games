@@ -72,7 +72,7 @@ func main() {
 
 	// --- Fiber App ---
 	app := fiber.New(fiber.Config{
-		AppName:      "GameHub Wallet Service",
+		AppName:      "Glory Grid Wallet Service",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	})

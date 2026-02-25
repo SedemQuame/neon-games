@@ -259,7 +259,7 @@ class _CryptoDepositScreenState extends State<CryptoDepositScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Send only ${coinData['name']} to this deposit address. Sending coin or token other than ${_selectedCoin} to this address may result in the loss of your deposit.',
+                            'Send only ${coinData['name']} to this deposit address. Sending coin or token other than $_selectedCoin to this address may result in the loss of your deposit.',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.white.withValues(alpha: 0.6),

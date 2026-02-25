@@ -46,15 +46,15 @@ func (c *Client) SendPasswordReset(ctx context.Context, email, token string) err
 	payload := map[string]interface{}{
 		"from":    c.from,
 		"to":      email,
-		"subject": "Reset your GameHub password",
+		"subject": "Reset your Glory Grid password",
 		"html": fmt.Sprintf(
-			`<p>We received a request to reset your GameHub password.</p>
+			`<p>We received a request to reset your Glory Grid password.</p>
 <p><a href="%s" style="display:inline-block;padding:10px 18px;background:#0ea5e9;color:#fff;border-radius:6px;text-decoration:none;">Reset Password</a></p>
 <p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`,
 			resetLink,
 		),
 		"text": fmt.Sprintf(
-			"Use the link below to reset your GameHub password (expires in 30 minutes):\n%s\nIf you did not request this change you can ignore this email.",
+			"Use the link below to reset your Glory Grid password (expires in 30 minutes):\n%s\nIf you did not request this change you can ignore this email.",
 			resetLink,
 		),
 	}
@@ -86,7 +86,7 @@ func (c *Client) SendPasswordReset(ctx context.Context, email, token string) err
 func (c *Client) composeResetLink(token string) string {
 	base := c.resetURL
 	if base == "" {
-		base = "https://gamehub.local/reset-password"
+		base = "https://glorygrid.local/reset-password"
 	}
 	separator := "?"
 	if strings.Contains(base, "?") {

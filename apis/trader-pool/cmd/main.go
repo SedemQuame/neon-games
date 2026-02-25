@@ -40,7 +40,7 @@ func main() {
 
 	// --- Fiber App (admin/health only — not in public gateway) ---
 	app := fiber.New(fiber.Config{
-		AppName:      "GameHub Trader Pool",
+		AppName:      "Glory Grid Trader Pool",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	})

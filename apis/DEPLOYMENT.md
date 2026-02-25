@@ -1,4 +1,4 @@
-# GameHub API — Deployment Plan
+# Glory Grid API — Deployment Plan
 > **Version:** 1.0 | **Updated:** February 2026
 
 ---

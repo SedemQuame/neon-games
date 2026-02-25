@@ -115,7 +115,7 @@ class ApiClient {
   String _friendlyErrorMessage(int statusCode, String serverMessage) {
     final trimmed = serverMessage.trim();
     final fallback =
-        "We're having trouble reaching GameHub right now. Please try again in a moment.";
+        "We're having trouble reaching Glory Grid right now. Please try again in a moment.";
     final looksHtml = _looksLikeHtml(trimmed);
     if (statusCode >= 500 || looksHtml || trimmed.isEmpty) {
       return fallback;

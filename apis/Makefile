@@ -1,4 +1,4 @@
-# Makefile — GameHub API Orchestration
+# Makefile — Glory Grid API Orchestration
 # Usage: make <target>
 
 .PHONY: help setup up down logs build restart clean ps
@@ -6,7 +6,7 @@
 # Default target
 help:
 	@echo ""
-	@echo "GameHub API — Available commands:"
+	@echo "Glory Grid API — Available commands:"
 	@echo ""
 	@echo "  make setup     — First-time setup: copy .env, generate JWT keys"
 	@echo "  make up        — Start all services (build if needed)"
@@ -29,7 +29,7 @@ setup:
 	@echo "✅ Setup complete. Edit .env with your real credentials before running 'make up'."
 
 up:
-	@echo "→ Starting all GameHub services..."
+	@echo "→ Starting all Glory Grid services..."
 	docker compose up -d --build
 	@echo "✅ All services started. Run 'make logs' to watch output."
 

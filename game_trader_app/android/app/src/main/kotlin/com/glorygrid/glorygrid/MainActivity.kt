@@ -1,4 +1,4 @@
-package com.example.game_trader_app
+package com.glorygrid.glorygrid
 
 import io.flutter.embedding.android.FlutterActivity
 

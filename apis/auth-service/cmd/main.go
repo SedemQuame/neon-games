@@ -196,7 +196,7 @@ func handleRequestOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: Call Hubtel SMS API to deliver the code
-	// hubtelSMS.Send(body.Phone, "Your GameHub OTP: "+code)
+		// hubtelSMS.Send(body.Phone, "Your Glory Grid OTP: "+code)
 
 	respondJSON(w, 200, map[string]string{"message": "OTP sent to " + body.Phone})
 }

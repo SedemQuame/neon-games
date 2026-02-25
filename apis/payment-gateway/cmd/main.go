@@ -89,7 +89,7 @@ func main() {
 
 	// --- Fiber App ---
 	app := fiber.New(fiber.Config{
-		AppName:      "GameHub Payment Gateway",
+		AppName:      "Glory Grid Payment Gateway",
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	})

@@ -1,5 +1,5 @@
 # Backend Architecture Specification
-## GameHub Trading Platform
+## Glory Grid Trading Platform
 
 > **Version:** 1.2.0 | **Last Updated:** February 2026 | **Status:** Draft
 
@@ -55,7 +55,7 @@
 
 ## 1. Executive Summary
 
-The GameHub backend is a **distributed microservices platform** that acts as a **broker layer** between the Flutter application and Deriv's trading/game servers.
+The Glory Grid backend is a **distributed microservices platform** that acts as a **broker layer** between the Flutter application and Deriv's trading/game servers.
 
 > ⚠️ **Critical Architectural Note:** Game outcomes (win/loss) are **not determined by our backend**. They are determined entirely by **Deriv's game servers**, based on live market tick data. Our system is responsible for:
 > 1. Accepting player predictions from the app via WebSocket.

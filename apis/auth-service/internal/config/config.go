@@ -63,7 +63,7 @@ func Load() *Config {
 
 		HubtelSMSClientID:     getEnv("HUBTEL_SMS_CLIENT_ID", ""),
 		HubtelSMSClientSecret: getEnv("HUBTEL_SMS_CLIENT_SECRET", ""),
-		HubtelSMSFrom:         getEnv("HUBTEL_SMS_FROM", "GameHub"),
+		HubtelSMSFrom:         getEnv("HUBTEL_SMS_FROM", "Glory Grid"),
 		OTPTTLMinutes:         getEnv("OTP_TTL_MINUTES", "5"),
 
 		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
@@ -72,8 +72,8 @@ func Load() *Config {
 		InternalServiceKey: getEnv("INTERNAL_SERVICE_KEY", "dev-internal-key"),
 
 		ResendAPIKey:            getEnv("RESEND_API_KEY", ""),
-		EmailFrom:               getEnv("EMAIL_FROM", "GameHub Support <support@gamehub.local>"),
-		PasswordResetURL:        getEnv("PASSWORD_RESET_URL", "https://gamehub.local/reset-password"),
+		EmailFrom:               getEnv("EMAIL_FROM", "Glory Grid Support <support@glorygrid.local>"),
+		PasswordResetURL:        getEnv("PASSWORD_RESET_URL", "https://glorygrid.local/reset-password"),
 		PasswordResetTTLMinutes: getEnv("PASSWORD_RESET_TTL_MINUTES", "30"),
 
 		AppEnv:   getEnv("APP_ENV", "development"),

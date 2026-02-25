@@ -8,7 +8,7 @@
 PRODUCT_NAME = game_trader_app
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.gameTraderApp
+PRODUCT_BUNDLE_IDENTIFIER = com.legendarypixels.glorygrid
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 com.legendarypixels. All rights reserved.

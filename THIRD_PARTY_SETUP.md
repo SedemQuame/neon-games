@@ -1,6 +1,6 @@
 # Third-Party Service Setup Guide
 
-This document walks through the credentials, sandbox programs, and local configuration that GameHub’s backend expects for each external dependency. Copy `apis/example.env` to `apis/.env` and fill in the variables referenced in each section.
+This document walks through the credentials, sandbox programs, and local configuration that Glory Grid’s backend expects for each external dependency. Copy `apis/example.env` to `apis/.env` and fill in the variables referenced in each section.
 
 ---
 
@@ -49,7 +49,7 @@ Restart the services after updating `.env`:
    - **Test Public Key** (e.g., `pk_test_xxx`)
    - **Webhook signing secret** (the dashboard displays it after you add a URL)
 3. Contact Paystack support (chat or email) to enable **Ghana Mobile Money** channels on the sub-account. Test mode is enabled instantly; production requires KYC + bank account.
-4. Optional but recommended: create a dedicated **Subaccount** for GameHub payouts so settlements remain isolated.
+4. Optional but recommended: create a dedicated **Subaccount** for Glory Grid payouts so settlements remain isolated.
 
 ### 2.2 Configure `.env`
 ```
@@ -105,7 +105,7 @@ TATUM_TESTNET=true
 
 ## 4. Transactional Email (Password Reset)
 
-GameHub uses [Resend](https://resend.com) for lightweight transactional emails (password reset links). Any SMTP/HTTP provider works as long as it accepts JSON requests — Resend just keeps the code path simple.
+Glory Grid uses [Resend](https://resend.com) for lightweight transactional emails (password reset links). Any SMTP/HTTP provider works as long as it accepts JSON requests — Resend just keeps the code path simple.
 
 ### 4.1 Generate an API Key
 1. Create a Resend account and add your sending domain (or use the auto-generated sandbox domain for quick tests).
@@ -114,7 +114,7 @@ GameHub uses [Resend](https://resend.com) for lightweight transactional emails (
 ### 4.2 Configure `.env`
 ```
 RESEND_API_KEY=rk_live_xxx_or_test_key
-EMAIL_FROM="GameHub Support <support@gamehub.dev>"
+EMAIL_FROM="Glory Grid Support <support@glorygrid.dev>"
 PASSWORD_RESET_URL=https://app.gamehub.dev/reset-password
 PASSWORD_RESET_TTL_MINUTES=30
 ```

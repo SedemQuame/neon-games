@@ -23,7 +23,7 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
   static const int _maxMinutes = 15;
 
   int _selectedTabIndex = 0;
-  int _durationMinutes = 5;
+  final int _durationMinutes = 5;
 
   late AnimationController _pulseController;
   final math.Random _rng = math.Random();

@@ -22,8 +22,12 @@ migrate_working_dir/
 !.env.example
 example.env
 *.key
+*.keystore
 **/dev-secrets/
 **/*.pem
+key.properties
+android/key.properties
+game_trader_app/android/key.properties
 
 # IntelliJ related
 *.iml

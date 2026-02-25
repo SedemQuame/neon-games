@@ -20,7 +20,7 @@ Commands:
   init         Copy .env.example, generate dev RSA keys, and verify prerequisites
   infra        Start only shared infrastructure services (mongo, redis, vault)
   services     Start only the Go microservices (requires infra running)
-  up           Build and start the full GameHub stack via docker compose
+  up           Build and start the full Glory Grid stack via docker compose
   bootstrap    Convenience: infra + services (same as running infra, then services)
   down         Stop all containers defined in docker-compose.yml
   status       Show docker compose service status
@@ -101,7 +101,7 @@ cmd_bootstrap() {
   cmd_infra
   echo "Bringing up Go microservices..."
   cmd_services
-  echo "GameHub stack is running. Use './setup.sh logs' to inspect logs or './setup.sh dev' to tail everything."
+  echo "Glory Grid stack is running. Use './setup.sh logs' to inspect logs or './setup.sh dev' to tail everything."
 }
 
 cmd_down() {

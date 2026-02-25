@@ -54,7 +54,7 @@ class SettingsScreen extends StatelessWidget {
               style: TextStyle(color: Colors.white),
             ),
             subtitle: const Text(
-              'Fetch the latest funds from GameHub',
+              'Fetch the latest funds from Glory Grid',
               style: TextStyle(color: Color(0xFF94a3b8)),
             ),
             trailing: const Icon(Icons.refresh, color: Colors.white54),

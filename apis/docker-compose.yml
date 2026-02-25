@@ -1,7 +1,7 @@
 version: "3.9"
 
 # =============================================================================
-# GameHub — Docker Compose (Simplified — No Kafka)
+# Glory Grid — Docker Compose (Simplified — No Kafka)
 # Event bus: Redis PubSub | Inter-service: Direct HTTP
 # =============================================================================
 
