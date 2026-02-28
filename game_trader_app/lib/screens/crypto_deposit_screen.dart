@@ -18,6 +18,7 @@ class CryptoDepositScreen extends StatefulWidget {
 class _CryptoDepositScreenState extends State<CryptoDepositScreen> {
   String _selectedCoin = 'BTC';
   bool _loading = false;
+  bool _checkingPayment = false;
   String? _error;
   CryptoAddress? _address;
 
@@ -91,6 +92,160 @@ class _CryptoDepositScreenState extends State<CryptoDepositScreen> {
         });
       }
     }
+  }
+
+  Future<void> _checkPayment() async {
+    if (_address == null || _checkingPayment) return;
+
+    final session = context.read<SessionManager>();
+    final token = session.session?.accessToken;
+    if (token == null) return;
+
+    setState(() => _checkingPayment = true);
+
+    int totalElapsedSeconds = 0;
+    const int maxPollingSeconds =
+        270; // 4.5 minutes (captures the 0m, 1m, and 3m backend checks)
+    const int delaySeconds = 10;
+    bool found = false;
+
+    try {
+      while (totalElapsedSeconds < maxPollingSeconds &&
+          mounted &&
+          _checkingPayment) {
+        final response = await session.paymentService.checkCryptoDeposit(
+          token: token,
+          coin: _selectedCoin,
+          address: _address!.address,
+        );
+
+        if (!mounted) break;
+
+        final status = response['status'] as String?;
+
+        if (status == 'CONFIRMED' || status == 'PENDING') {
+          found = true;
+          break;
+        }
+
+        // Wait for next poll (backend prevents actual API spam)
+        await Future.delayed(const Duration(seconds: delaySeconds));
+        totalElapsedSeconds += delaySeconds;
+      }
+
+      if (!mounted) return;
+
+      if (found) {
+        _showSuccessDialog();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'No transaction found on the blockchain yet. Please ensure you sent the funds and wait for automatic confirmation.',
+            ),
+            backgroundColor: Colors.orange.shade800,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to check payment status. Please try again.'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _checkingPayment = false);
+      }
+    }
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: AppTheme.surfaceDark,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: AppTheme.borderDark),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_outline,
+                    color: AppTheme.primaryColor,
+                    size: 48,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Deposit Detected!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your transaction has been found on the network. Your balance will be updated automatically once it reaches the required network confirmations.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7),
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(); // Close dialog
+                      Navigator.of(context).pop(); // Go back to previous screen
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Return to Dashboard',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -411,6 +566,55 @@ class _CryptoDepositScreenState extends State<CryptoDepositScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
+
+                    // I have paid Button
+                    if (_address != null && !_loading && _error == null)
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: _checkingPayment ? null : _checkPayment,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: _checkingPayment
+                              ? const Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Confirming Transaction...',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : const Text(
+                                  'I have paid',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    if (_address != null && !_loading && _error == null)
+                      const SizedBox(height: 24),
 
                     // Important Notes
                     Container(

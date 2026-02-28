@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -115,21 +117,73 @@ func (c *Client) GetTransactionsByAddress(ctx context.Context, coin, address str
 
 	_, chainPath := c.chainParams(coin)
 	var endpoint string
-	switch chainPath {
-	case "bitcoin":
-		endpoint = fmt.Sprintf("%s/v3/bitcoin/transaction/address/%s?pageSize=50", c.BaseURL, address)
-	case "ethereum":
-		endpoint = fmt.Sprintf("%s/v3/ethereum/account/transaction/%s?pageSize=50", c.BaseURL, address)
-	case "tron":
-		endpoint = fmt.Sprintf("%s/v3/tron/transaction/account/%s?pageSize=50", c.BaseURL, address)
-	default:
-		return nil, fmt.Errorf("tatum: unsupported chain for tx lookup: %s", coin)
-	}
 
 	var txs []Transaction
-	if err := c.doGet(ctx, endpoint, &txs); err != nil {
-		return nil, fmt.Errorf("tatum GetTransactionsByAddress %s/%s: %w", coin, address, err)
+
+	if chainPath == "tron" {
+		if coin == "USDT" || coin == "USDC" {
+			endpoint = fmt.Sprintf("%s/v3/tron/transaction/account/%s/trc20", c.BaseURL, address)
+		} else {
+			endpoint = fmt.Sprintf("%s/v3/tron/transaction/account/%s?pageSize=50", c.BaseURL, address)
+		}
+
+		// TRON endpoints return an object with a "transactions" array
+		var tronResp struct {
+			Transactions []struct {
+				TxID          string `json:"txID"`
+				From          string `json:"from"`
+				To            string `json:"to"`
+				Value         string `json:"value"`
+				Confirmations int    `json:"confirmations,omitempty"` // For TRC20 they might omit it, default to 0
+				TokenInfo     *Token `json:"tokenInfo,omitempty"`
+			} `json:"transactions"`
+		}
+
+		if err := c.doGet(ctx, endpoint, &tronResp); err != nil {
+			return nil, fmt.Errorf("tatum GetTransactionsByAddress TRON %s/%s: %w", coin, address, err)
+		}
+
+		txs = make([]Transaction, len(tronResp.Transactions))
+		for i, raw := range tronResp.Transactions {
+			// Convert raw token amount to human-readable float using decimals
+			humanValue := raw.Value
+			if raw.TokenInfo != nil && raw.TokenInfo.Decimals > 0 && raw.Value != "" {
+				if atomicVal, err := strconv.ParseFloat(raw.Value, 64); err == nil {
+					divisor := math.Pow(10, float64(raw.TokenInfo.Decimals))
+					humanValue = fmt.Sprintf("%f", atomicVal/divisor)
+				}
+			}
+
+			// TRON testnet usually has instant irreversibility, but some APIs might omit confirmations for TRC20.
+			// Let's set it to 10 by default if it's missing just so the backend accepts it as CONFIRMED.
+			confs := raw.Confirmations
+			if confs == 0 {
+				confs = 19 // sufficient to mark as confirmed in GameHub
+			}
+
+			txs[i] = Transaction{
+				Hash:          raw.TxID,
+				From:          raw.From,
+				To:            raw.To,
+				Value:         humanValue,
+				Confirmations: confs, // Map to what our processCryptoTx expects
+				Token:         raw.TokenInfo,
+			}
+		}
+	} else {
+		switch chainPath {
+		case "bitcoin":
+			endpoint = fmt.Sprintf("%s/v3/bitcoin/transaction/address/%s?pageSize=50", c.BaseURL, address)
+		case "ethereum":
+			endpoint = fmt.Sprintf("%s/v3/ethereum/account/transaction/%s?pageSize=50", c.BaseURL, address)
+		default:
+			return nil, fmt.Errorf("tatum: unsupported chain for tx lookup: %s", coin)
+		}
+		if err := c.doGet(ctx, endpoint, &txs); err != nil {
+			return nil, fmt.Errorf("tatum GetTransactionsByAddress %s/%s: %w", coin, address, err)
+		}
 	}
+
 	return txs, nil
 }
 

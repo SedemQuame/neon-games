@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -25,6 +26,9 @@ import (
 	"gamehub/payment-gateway/internal/tatum"
 	"gamehub/payment-gateway/internal/wallet"
 )
+
+// Active polling trackers
+var activeCryptoChecks sync.Map
 
 type Handler struct {
 	db            *mongo.Database
@@ -870,6 +874,123 @@ func (h *Handler) GenerateAllCryptoWallets(c *fiber.Ctx) error {
 		"userId":  body.UserID,
 		"wallets": results,
 	})
+}
+
+// ManualCryptoCheck allows the frontend to manually ask the backend to scan Tatum for a specific wallet address
+func (h *Handler) ManualCryptoCheck(c *fiber.Ctx) error {
+	var body struct {
+		Coin    string `json:"coin"`
+		Address string `json:"address"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON"})
+	}
+	if body.Coin == "" || body.Address == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "coin and address are required"})
+	}
+
+	userID := c.Locals("userId").(string)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 1. Verify this wallet belongs to the user
+	var walletDoc bson.M
+	err := h.db.Collection("crypto_wallets").FindOne(ctx, bson.M{
+		"userId":  userID,
+		"coin":    body.Coin,
+		"address": body.Address,
+	}).Decode(&walletDoc)
+	if err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "wallet not found"})
+	}
+
+	trackingKey := body.Coin + "_" + body.Address
+
+	// 2. Check if already tracking
+	if _, tracking := activeCryptoChecks.Load(trackingKey); tracking {
+		return c.JSON(fiber.Map{
+			"status": "TRACKING_STARTED",
+			"found":  0,
+		})
+	}
+
+	// Lock the tracking
+	activeCryptoChecks.Store(trackingKey, true)
+
+	// 3. Perform immediate check 0m
+	status, count, err := h.checkAndProcessTxs(userID, body.Coin, body.Address)
+	if err != nil {
+		activeCryptoChecks.Delete(trackingKey)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to contact blockchain explorer"})
+	}
+
+	if status == "CONFIRMED" || status == "PENDING" {
+		activeCryptoChecks.Delete(trackingKey)
+		return c.JSON(fiber.Map{
+			"status": status,
+			"found":  count,
+		})
+	}
+
+	// 4. Start background polling 1m, 3m
+	go func(coin, address, uid, key string) {
+		defer activeCryptoChecks.Delete(key) // Ensure cleanup when goroutine finishes
+
+		// Wait 1 minute
+		time.Sleep(1 * time.Minute)
+		bgStatus, _, bgErr := h.checkAndProcessTxs(uid, coin, address)
+		if bgErr == nil && (bgStatus == "CONFIRMED" || bgStatus == "PENDING") {
+			return // Success, terminate early
+		}
+
+		// Wait 3 more minutes (total 4m from start)
+		time.Sleep(3 * time.Minute)
+		_, _, _ = h.checkAndProcessTxs(uid, coin, address)
+		// Routine exits and defers deletion
+	}(body.Coin, body.Address, userID, trackingKey)
+
+	// Return to user immediately indicating we are watching it
+	return c.JSON(fiber.Map{
+		"status": "TRACKING_STARTED",
+		"found":  count,
+	})
+}
+
+func (h *Handler) checkAndProcessTxs(userID, coin, address string) (string, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	txs, err := h.tatumClient.GetTransactionsByAddress(ctx, coin, address)
+	if err != nil {
+		log.Printf("[crypto-check] error checking tatum for %s/%s: %v", coin, address, err)
+		return "NO_TX", 0, err
+	}
+
+	if len(txs) == 0 {
+		return "NO_TX", 0, nil
+	}
+
+	highestStatus := "NO_TX"
+	for _, tx := range txs {
+		if tx.Hash == "" {
+			continue
+		}
+
+		// Process transaction uniquely
+		h.processCryptoTx(context.Background(), userID, coin, address, tx)
+
+		required := confirmationThreshold[coin]
+		if required == 0 {
+			required = 3
+		}
+		if tx.Confirmations >= required {
+			highestStatus = "CONFIRMED"
+		} else if highestStatus != "CONFIRMED" {
+			highestStatus = "PENDING"
+		}
+	}
+
+	return highestStatus, len(txs), nil
 }
 
 func (h *Handler) GetPendingWithdrawals(c *fiber.Ctx) error {

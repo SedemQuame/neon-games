@@ -38,6 +38,19 @@ class PaymentService {
     return CryptoAddress.fromJson((response as Map).cast<String, dynamic>());
   }
 
+  Future<Map<String, dynamic>> checkCryptoDeposit({
+    required String token,
+    required String coin,
+    required String address,
+  }) async {
+    final response = await _client.post(
+      '/api/v1/payments/crypto/check',
+      token: token,
+      body: {'coin': coin, 'address': address},
+    );
+    return (response as Map).cast<String, dynamic>();
+  }
+
   Stream<dynamic> paymentUpdates(String token) {
     final uri = Uri.parse('${_client.websocketBase}/ws/payments?token=$token');
     final channel = WebSocketChannel.connect(uri);

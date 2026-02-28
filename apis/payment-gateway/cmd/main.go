@@ -98,10 +98,6 @@ func main() {
 	// Webhooks can occasionally be delayed — this ensures we don't miss confirmations
 	go h.RunMoMoStatusPoller(context.Background())
 
-	// --- Background: Poll blockchain explorers for crypto deposits ---
-	// Safety net alongside Tatum webhooks
-	go h.RunCryptoDepositWatcher(context.Background())
-
 	// --- Fiber App ---
 	app := fiber.New(fiber.Config{
 		AppName:      "Glory Grid Payment Gateway",
@@ -133,6 +129,8 @@ func main() {
 	v1.Post("/crypto/address", h.GenerateCryptoAddress)
 	// Check status of a crypto deposit by tx hash
 	v1.Get("/crypto/status/:txHash", h.GetCryptoDepositStatus)
+	// Manually check Tatum for deposits to a specific address
+	v1.Post("/crypto/check", h.ManualCryptoCheck)
 
 	// --- General History ---
 	v1.Get("/history", h.GetPaymentHistory)
