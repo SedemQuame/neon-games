@@ -513,6 +513,7 @@ class _DigitDashScreenState extends State<DigitDashScreen>
         stakeUsd: stakeAmount,
         prediction: _buildPrediction(matchMode),
       );
+      if (!mounted) return;
       setState(() => _status = 'Listening for a response...');
       _startWheelLoop();
       showGameMessage(
@@ -521,12 +522,14 @@ class _DigitDashScreenState extends State<DigitDashScreen>
         '\$${stakeAmount.toStringAsFixed(2)}',
       );
     } on GameSocketException catch (err) {
+      if (!mounted) return;
       setState(() {
         _isSpinning = false;
         _status = err.message;
       });
       showGameMessage(context, err.message);
     } catch (err) {
+      if (!mounted) return;
       setState(() {
         _isSpinning = false;
         _status = 'Bet failed';
@@ -592,14 +595,14 @@ class _DigitDashScreenState extends State<DigitDashScreen>
     setState(() {
       resultDigit = digit;
       _status = win
-          ? 'WIN · +\$${event.payoutUsd.toStringAsFixed(2)}'
+          ? 'WIN · +\$${event.winAmountUsd.toStringAsFixed(2)}'
           : 'Round ${event.outcome}';
     });
     _settleWheel(digit);
     showGameMessage(
       context,
       win
-          ? 'You won \$${event.payoutUsd.toStringAsFixed(2)}'
+          ? 'You won \$${event.winAmountUsd.toStringAsFixed(2)}'
           : 'Round ${event.outcome}',
     );
   }

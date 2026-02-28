@@ -157,6 +157,7 @@ class SessionManager extends ChangeNotifier {
         'game',
         'Result ${event.gameType} ${event.outcome} '
         'stake=\$${event.stakeUsd.toStringAsFixed(2)} '
+        'win=\$${event.winAmountUsd.toStringAsFixed(2)} '
         'payout=\$${event.payoutUsd.toStringAsFixed(2)} '
         'contract=${event.derivContractId ?? 'N/A'}',
       );

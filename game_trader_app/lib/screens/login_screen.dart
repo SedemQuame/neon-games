@@ -171,10 +171,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 32),
                         _buildForm(context, session),
                         const SizedBox(height: 40),
-                        _buildDivider(),
-                        const SizedBox(height: 40),
-                        _buildSocialLogins(),
-                        const SizedBox(height: 40),
+                        // Note: Social logins removed
+                        const SizedBox(height: 32),
+                        const SizedBox(height: 32),
                         _buildFooter(context),
                       ],
                     ),
@@ -416,9 +415,7 @@ class _LoginScreenState extends State<LoginScreen> {
             suffixIcon: enableVisibilityToggle
                 ? IconButton(
                     icon: Icon(
-                      obscureText
-                          ? Icons.visibility_off
-                          : Icons.visibility,
+                      obscureText ? Icons.visibility_off : Icons.visibility,
                       color: Colors.grey,
                     ),
                     onPressed: onToggleVisibility,
@@ -427,66 +424,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: AppTheme.borderDark)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'OR CONTINUE WITH',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
-            ),
-          ),
-        ),
-        const Expanded(child: Divider(color: AppTheme.borderDark)),
-      ],
-    );
-  }
-
-  Widget _buildSocialLogins() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildSocialButton(
-          child: Image.network(
-            'https://lh3.googleusercontent.com/aida-public/AB6AXuCeb889FjKdiRyFM0yRqossRV5BuvQjyCYL3kgKQR20NIQlDtJZI3ibEgQp6kEL06_VsPP8JAavh6RIaaNE7BEQwYT2-jNpKCAz9cNKTD7eBS9wYwZmoRlcGVsGakN8omVpJfp3Sq6C6MFxfbdheK0HJ63Rz6BvqGyMl-0rSLwHq9FroHgzacvJ_QUQ5H4yzBm9Dso28mPRERb1QCdziE7nAViAx0hWhiVn5jH6yC0PRT23eiW4w69TTAAZ4xLcS0qxeGAdaM8K9Tbt',
-            width: 24,
-            height: 24,
-            errorBuilder: (context, error, stackTrace) =>
-                const Icon(Icons.g_mobiledata, color: Colors.white, size: 30),
-          ),
-        ),
-        const SizedBox(width: 16),
-        _buildSocialButton(
-          child: const Icon(Icons.facebook, color: Color(0xFF1877F2), size: 28),
-        ),
-        const SizedBox(width: 16),
-        _buildSocialButton(
-          child: const Icon(Icons.apple, color: Colors.white, size: 28),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSocialButton({required Widget child}) {
-    return Container(
-      width: 56,
-      height: 56,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
-        shape: BoxShape.circle,
-        border: Border.all(color: AppTheme.borderDark),
-      ),
-      child: child,
     );
   }
 

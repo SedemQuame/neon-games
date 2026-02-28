@@ -595,13 +595,13 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
       _isExecuting = false;
       _activeCommand = null;
       _statusMessage = win
-          ? '$commandLabel cleared +\$${event.payoutUsd.toStringAsFixed(2)}'
+          ? '$commandLabel cleared +\$${event.winAmountUsd.toStringAsFixed(2)}'
           : '$commandLabel settled ${event.outcome}';
     });
     showGameMessage(
       context,
       win
-          ? '$commandLabel paid \$${event.payoutUsd.toStringAsFixed(2)}'
+          ? '$commandLabel paid \$${event.winAmountUsd.toStringAsFixed(2)}'
           : '$commandLabel closed as ${event.outcome}',
     );
   }

@@ -21,22 +21,22 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"gamehub/payment-gateway/internal/config"
-	"gamehub/payment-gateway/internal/paystack"
+	"gamehub/payment-gateway/internal/flutterwave"
 	"gamehub/payment-gateway/internal/tatum"
 	"gamehub/payment-gateway/internal/wallet"
 )
 
 type Handler struct {
-	db             *mongo.Database
-	rdb            *redis.Client
-	paystackClient *paystack.Client
-	tatumClient    *tatum.Client
-	walletClient   *wallet.HTTPClient
-	cfg            *config.Config
+	db            *mongo.Database
+	rdb           *redis.Client
+	flutterClient *flutterwave.Client
+	tatumClient   *tatum.Client
+	walletClient  *wallet.HTTPClient
+	cfg           *config.Config
 }
 
-func New(db *mongo.Database, rdb *redis.Client, pc *paystack.Client, tc *tatum.Client, wc *wallet.HTTPClient, cfg *config.Config) *Handler {
-	return &Handler{db: db, rdb: rdb, paystackClient: pc, tatumClient: tc, walletClient: wc, cfg: cfg}
+func New(db *mongo.Database, rdb *redis.Client, fc *flutterwave.Client, tc *tatum.Client, wc *wallet.HTTPClient, cfg *config.Config) *Handler {
+	return &Handler{db: db, rdb: rdb, flutterClient: fc, tatumClient: tc, walletClient: wc, cfg: cfg}
 }
 
 var confirmationThreshold = map[string]int{
@@ -52,29 +52,35 @@ var defaultNetworks = map[string]string{
 }
 
 type paymentEvent struct {
-	ID        string    `bson:"_id"`
-	UserID    string    `bson:"userId"`
-	Type      string    `bson:"type"`
-	Status    string    `bson:"status"`
-	Amount    float64   `bson:"amount"`
-	Currency  string    `bson:"currency"`
-	Channel   string    `bson:"channel,omitempty"`
-	Reference string    `bson:"reference,omitempty"`
-	CreatedAt time.Time `bson:"createdAt"`
+	ID           string    `bson:"_id"`
+	UserID       string    `bson:"userId"`
+	Type         string    `bson:"type"`
+	Status       string    `bson:"status"`
+	Amount       float64   `bson:"amount"`
+	Currency     string    `bson:"currency"`
+	Channel      string    `bson:"channel,omitempty"`
+	Phone        string    `bson:"phone,omitempty"`
+	Reference    string    `bson:"reference,omitempty"`
+	ProviderTxID string    `bson:"providerTxId,omitempty"`
+	CreatedAt    time.Time `bson:"createdAt"`
+	UpdatedAt    time.Time `bson:"updatedAt"`
+	SettledAt    time.Time `bson:"settledAt,omitempty"`
 }
 
 type withdrawalRecord struct {
-	ID           string    `bson:"_id"`
-	UserID       string    `bson:"userId"`
-	Phone        string    `bson:"phone"`
-	Channel      string    `bson:"channel"`
-	Amount       float64   `bson:"amount"`
-	Currency     string    `bson:"currency"`
-	PaystackRef  string    `bson:"paystackRef"`
-	TransferCode string    `bson:"transferCode,omitempty"`
-	Status       string    `bson:"status"`
-	CreatedAt    time.Time `bson:"createdAt"`
-	UpdatedAt    time.Time `bson:"updatedAt"`
+	ID                string    `bson:"_id"`
+	UserID            string    `bson:"userId"`
+	Phone             string    `bson:"phone"`
+	Channel           string    `bson:"channel"`
+	Amount            float64   `bson:"amount"`
+	Currency          string    `bson:"currency"`
+	ProviderRef       string    `bson:"providerRef,omitempty"`
+	LegacyPaystackRef string    `bson:"paystackRef,omitempty"`
+	TransferCode      string    `bson:"transferCode,omitempty"`
+	Status            string    `bson:"status"`
+	CreatedAt         time.Time `bson:"createdAt"`
+	UpdatedAt         time.Time `bson:"updatedAt"`
+	SettledAt         time.Time `bson:"settledAt,omitempty"`
 }
 
 type cryptoDepositPayload struct {
@@ -87,31 +93,26 @@ type cryptoDepositPayload struct {
 	Confirmations int     `json:"confirmations"`
 }
 
-type paystackWebhook struct {
-	Event string          `json:"event"`
-	Data  json.RawMessage `json:"data"`
+type flutterwaveWebhook struct {
+	Event string                 `json:"event"`
+	Data  flutterwaveWebhookData `json:"data"`
 }
 
-type paystackChargeData struct {
-	Reference string `json:"reference"`
-	Status    string `json:"status"`
-	Amount    int64  `json:"amount"`
-	Currency  string `json:"currency"`
-}
-
-type paystackTransferData struct {
-	TransferCode string `json:"transfer_code"`
-	Reference    string `json:"reference"`
-	Status       string `json:"status"`
-	Amount       int64  `json:"amount"`
-	Currency     string `json:"currency"`
+type flutterwaveWebhookData struct {
+	ID        int64   `json:"id"`
+	Status    string  `json:"status"`
+	TxRef     string  `json:"tx_ref"`
+	Reference string  `json:"reference"`
+	FlwRef    string  `json:"flw_ref"`
+	Amount    float64 `json:"amount"`
+	Currency  string  `json:"currency"`
 }
 
 // =============================================================================
 // MOBILE MONEY — DEPOSIT
 // =============================================================================
 
-// InitiateMoMoDeposit triggers a Paystack MoMo charge for the user's phone.
+// InitiateMoMoDeposit triggers a Flutterwave MoMo charge for the user's phone.
 // POST /api/v1/payments/momo/deposit
 func (h *Handler) InitiateMoMoDeposit(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(string)
@@ -124,8 +125,8 @@ func (h *Handler) InitiateMoMoDeposit(c *fiber.Ctx) error {
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
-	body.Phone = strings.TrimSpace(body.Phone)
-	body.Channel = strings.ToLower(strings.TrimSpace(body.Channel))
+	body.Phone = normalizePhone(strings.TrimSpace(body.Phone))
+	body.Channel = normalizeChannel(body.Channel)
 	if body.Phone == "" || body.Amount <= 0 || body.Channel == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "phone, channel and amount are required"})
 	}
@@ -133,54 +134,71 @@ func (h *Handler) InitiateMoMoDeposit(c *fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "unsupported channel"})
 	}
 
-	// Generate a unique reference per transaction
-	clientRef := fmt.Sprintf("DEP-%s-%d", shortID(userID), time.Now().UnixNano())
+	amount := roundMoney(body.Amount)
+	if amount <= 0 {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "amount must be at least 0.01"})
+	}
 
-	// Record the intent before calling Paystack (idempotency anchor)
+	clientRef := fmt.Sprintf("DEP-%s-%d", shortID(userID), time.Now().UnixNano())
 	event := bson.M{
-		"_id":       clientRef, // clientReference as _id for O(1) dedup
+		"_id":       clientRef,
+		"reference": clientRef,
 		"userId":    userID,
 		"type":      "MOMO_DEPOSIT",
 		"channel":   body.Channel,
 		"phone":     body.Phone,
-		"amount":    body.Amount,
-		"currency":  "GHS",
+		"amount":    amount,
+		"currency":  h.cfg.MoMoDefaultCurrency,
 		"status":    "PENDING",
 		"createdAt": time.Now(),
 		"updatedAt": time.Now(),
 	}
-	_, err := h.db.Collection("payment_events").InsertOne(context.Background(), event)
-	if err != nil {
+	if _, err := h.db.Collection("payment_events").InsertOne(context.Background(), event); err != nil {
+		log.Printf("[payments][deposit][%s] ERROR InsertOne payment_events: %v", clientRef, err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record payment intent"})
 	}
-	log.Printf("[payments][deposit][%s] user=%s channel=%s amount=%.2f", clientRef, userID, body.Channel, body.Amount)
+	log.Printf("[payments][deposit][%s] user=%s channel=%s amount=%.2f", clientRef, userID, body.Channel, amount)
 
-	amountMinor := toMinorUnits(body.Amount)
-	provider := providerFromChannel(body.Channel)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
 
-	resp, err := h.paystackClient.ChargeMobileMoney(context.Background(), paystack.ChargeRequest{
+	network := networkFromChannel(body.Channel)
+	resp, err := h.flutterClient.ChargeMobileMoney(ctx, flutterwave.MobileMoneyChargeRequest{
 		Reference:   clientRef,
+		Amount:      amount,
+		Currency:    h.cfg.MoMoDefaultCurrency,
 		Email:       fmt.Sprintf("%s@gusers.gamehub", userID),
-		AmountMinor: amountMinor,
-		Currency:    h.cfg.PaystackDefaultCurrency,
-		Phone:       body.Phone,
-		Provider:    provider,
-	})
+		FullName:    fmt.Sprintf("Glory Grid %s", shortID(userID)),
+		PhoneNumber: body.Phone,
+		Network:     network,
+		Narration:   "Glory Grid Deposit",
+		CallbackURL: h.cfg.FlutterwaveChargeCallback,
+	}, clientRef)
 	if err != nil {
-		// Mark as failed in DB but don't lose the record
+		log.Printf("[payments][deposit][%s] flutterwave charge error: %v", clientRef, err)
 		h.db.Collection("payment_events").UpdateOne(context.Background(),
 			bson.M{"_id": clientRef},
-			bson.M{"$set": bson.M{"status": "INITIATION_FAILED", "error": err.Error()}},
+			bson.M{"$set": bson.M{"status": "INITIATION_FAILED", "error": err.Error(), "updatedAt": time.Now()}},
 		)
-		return c.Status(http.StatusBadGateway).JSON(fiber.Map{"error": "could not initiate Paystack payment"})
+		return c.Status(http.StatusBadGateway).JSON(fiber.Map{"error": "could not initiate Flutterwave payment"})
 	}
 
-	return c.Status(http.StatusAccepted).JSON(fiber.Map{
-		"reference":   clientRef,
-		"message":     "Paystack mobile money prompt sent to your phone. Approve it to finish the deposit.",
-		"displayText": resp.DisplayText,
-		"status":      "PENDING",
-	})
+	respBody := fiber.Map{
+		"reference":         clientRef,
+		"status":            "PENDING",
+		"message":           "Approve the mobile money prompt that just appeared on your phone to finish the deposit.",
+		"providerReference": resp.FlwRef,
+	}
+	if resp.Authorization != nil {
+		if resp.Authorization.Mode != "" {
+			respBody["providerAuthMode"] = resp.Authorization.Mode
+		}
+		if resp.Authorization.Redirect != "" {
+			respBody["providerRedirectUrl"] = resp.Authorization.Redirect
+			respBody["message"] = "We opened Flutterwave to finish verification. Complete that step, then approve the prompt on your phone."
+		}
+	}
+	return c.Status(http.StatusAccepted).JSON(respBody)
 }
 
 // GetMoMoStatus checks the current status of a MoMo payment.
@@ -195,6 +213,9 @@ func (h *Handler) GetMoMoStatus(c *fiber.Ctx) error {
 	).Decode(&event)
 	if err == mongo.ErrNoDocuments {
 		return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "payment not found"})
+	}
+	if err != nil {
+		return httpError(c, err)
 	}
 
 	return c.JSON(event)
@@ -217,158 +238,135 @@ func (h *Handler) InitiateMoMoWithdrawal(c *fiber.Ctx) error {
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
-	body.Phone = strings.TrimSpace(body.Phone)
-	body.Channel = strings.ToLower(strings.TrimSpace(body.Channel))
+	body.Phone = normalizePhone(strings.TrimSpace(body.Phone))
+	body.Channel = normalizeChannel(body.Channel)
 	if body.Phone == "" || body.Amount <= 0 || body.Channel == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "phone, amount and channel are required"})
 	}
 	if !h.isChannelSupported(body.Channel) {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "unsupported channel"})
 	}
+	amount := roundMoney(body.Amount)
 
-	// Step 1: Reserve funds in Wallet Service BEFORE initiating Paystack payout.
-	// This prevents overdraft if the Paystack call is slow or retried.
 	withdrawalID := primitive.NewObjectID().Hex()
-	err := h.walletClient.ReserveWithdrawal(context.Background(), wallet.ReservationRequest{
+	if err := h.walletClient.ReserveWithdrawal(context.Background(), wallet.ReservationRequest{
 		UserID:       userID,
 		WithdrawalID: withdrawalID,
-		AmountUsd:    body.Amount,
-	})
-	if err != nil {
+		AmountUsd:    amount,
+	}); err != nil {
 		return c.Status(http.StatusUnprocessableEntity).JSON(fiber.Map{
 			"error": fmt.Sprintf("insufficient balance or reservation failed: %v", err),
 		})
 	}
 
 	clientRef := fmt.Sprintf("WIT-%s-%d", shortID(userID), time.Now().UnixNano())
-
-	// Step 2: Record withdrawal intent
-	h.db.Collection("withdrawals").InsertOne(context.Background(), bson.M{
+	doc := bson.M{
 		"_id":         withdrawalID,
 		"userId":      userID,
 		"phone":       body.Phone,
 		"channel":     body.Channel,
-		"amount":      body.Amount,
-		"currency":    "GHS",
+		"amount":      amount,
+		"currency":    h.cfg.MoMoDefaultCurrency,
+		"providerRef": clientRef,
 		"paystackRef": clientRef,
 		"status":      "PROCESSING",
 		"createdAt":   time.Now(),
-	})
-	log.Printf("[payments][withdraw][%s] user=%s channel=%s amount=%.2f", clientRef, userID, body.Channel, body.Amount)
+		"updatedAt":   time.Now(),
+	}
+	h.db.Collection("withdrawals").InsertOne(context.Background(), doc)
+	log.Printf("[payments][withdraw][%s] user=%s channel=%s amount=%.2f", clientRef, userID, body.Channel, amount)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	provider := providerFromChannel(body.Channel)
-	recipient, err := h.paystackClient.CreateTransferRecipient(ctx, paystack.TransferRecipientRequest{
-		Name:     fmt.Sprintf("GH-%s", shortID(userID)),
-		Phone:    body.Phone,
-		Provider: provider,
-		Currency: h.cfg.PaystackDefaultCurrency,
-	})
-	if err != nil {
-		h.walletClient.ReleaseWithdrawal(context.Background(), userID, withdrawalID, false)
-		h.db.Collection("withdrawals").UpdateOne(context.Background(),
-			bson.M{"_id": withdrawalID},
-			bson.M{"$set": bson.M{"status": "FAILED", "error": err.Error()}},
-		)
-		return c.Status(http.StatusBadGateway).JSON(fiber.Map{"error": "could not register transfer recipient"})
-	}
-
-	transfer, err := h.paystackClient.InitiateTransfer(ctx, paystack.TransferRequest{
+	network := networkFromChannel(body.Channel)
+	transfer, err := h.flutterClient.InitiateTransfer(ctx, flutterwave.TransferRequest{
 		Reference:     clientRef,
-		AmountMinor:   toMinorUnits(body.Amount),
-		Currency:      h.cfg.PaystackDefaultCurrency,
-		RecipientCode: recipient.RecipientCode,
-		Reason:        "Glory Grid Wallet Withdrawal",
-	})
+		Amount:        amount,
+		Currency:      h.cfg.MoMoDefaultCurrency,
+		DebitCurrency: h.cfg.MoMoDefaultCurrency,
+		AccountBank:   network,
+		AccountNumber: body.Phone,
+		Narration:     "Glory Grid Wallet Withdrawal",
+		CallbackURL:   h.cfg.FlutterwaveTransferCallback,
+		Beneficiary:   fmt.Sprintf("GH %s", shortID(userID)),
+	}, clientRef)
 	if err != nil {
 		h.walletClient.ReleaseWithdrawal(context.Background(), userID, withdrawalID, false)
 		h.db.Collection("withdrawals").UpdateOne(context.Background(),
 			bson.M{"_id": withdrawalID},
-			bson.M{"$set": bson.M{"status": "FAILED", "error": err.Error()}},
+			bson.M{"$set": bson.M{"status": "FAILED", "error": err.Error(), "updatedAt": time.Now()}},
 		)
 		return c.Status(http.StatusBadGateway).JSON(fiber.Map{"error": "could not initiate withdrawal"})
 	}
+
 	h.db.Collection("withdrawals").UpdateOne(context.Background(),
 		bson.M{"_id": withdrawalID},
-		bson.M{"$set": bson.M{"transferCode": transfer.TransferCode}},
+		bson.M{"$set": bson.M{"transferCode": transfer.FlwRef}},
 	)
 
 	return c.Status(http.StatusAccepted).JSON(fiber.Map{
 		"withdrawalId": withdrawalID,
 		"reference":    clientRef,
 		"status":       "PROCESSING",
-		"message":      "Withdrawal is being processed. Funds will arrive within 1–5 minutes.",
+		"message":      "Withdrawal is being processed. Funds will arrive within minutes once Flutterwave confirms.",
 	})
 }
 
 // =============================================================================
-// PAYSTACK WEBHOOKS
+// FLUTTERWAVE WEBHOOKS
 // =============================================================================
 
-// PaystackDepositCallback handles Paystack's POST when a deposit payment is settled.
-// POST /webhooks/payment/paystack
-func (h *Handler) PaystackDepositCallback(c *fiber.Ctx) error {
-	var evt paystackWebhook
+// FlutterwaveDepositCallback handles Flutterwave charge notifications.
+// POST /webhooks/payment/flutterwave
+func (h *Handler) FlutterwaveDepositCallback(c *fiber.Ctx) error {
+	var evt flutterwaveWebhook
 	if err := json.Unmarshal(c.Body(), &evt); err != nil {
 		return c.Status(http.StatusBadRequest).SendString("bad payload")
 	}
-	var data paystackChargeData
-	if err := json.Unmarshal(evt.Data, &data); err != nil {
-		return c.Status(http.StatusBadRequest).SendString("invalid data")
-	}
-	ref := data.Reference
+	ref := firstNonEmpty(evt.Data.TxRef, evt.Data.Reference)
 	if ref == "" {
 		return c.SendStatus(http.StatusOK)
 	}
 
-	key := fmt.Sprintf("idempotency:paystack:%s", ref)
+	key := fmt.Sprintf("idempotency:flutterwave:deposit:%s", ref)
 	set, _ := h.rdb.SetNX(context.Background(), key, "1", 24*time.Hour).Result()
 	if !set {
-		// Already processed — acknowledge and exit
 		return c.SendStatus(http.StatusOK)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	status := strings.ToLower(evt.Event)
-	if status == "charge.success" || strings.EqualFold(data.Status, "success") {
+	status := strings.ToLower(evt.Data.Status)
+	if status == "successful" || strings.EqualFold(evt.Event, "charge.completed") {
 		log.Printf("[payments][deposit][%s] webhook success", ref)
-		if err := h.markMoMoDepositConfirmed(ctx, ref, ref); err != nil {
-			log.Printf("paystack webhook confirm failed: %v", err)
+		if err := h.markMoMoDepositConfirmed(ctx, ref, evt.Data.FlwRef); err != nil {
+			log.Printf("flutterwave webhook confirm failed: %v", err)
 		}
-	} else if status == "charge.failed" || strings.EqualFold(data.Status, "failed") {
+	} else if status == "failed" || strings.EqualFold(evt.Event, "charge.failed") {
 		log.Printf("[payments][deposit][%s] webhook failure", ref)
 		if err := h.markMoMoDepositFailed(ctx, ref); err != nil {
-			log.Printf("paystack webhook fail mark error: %v", err)
+			log.Printf("flutterwave webhook fail mark error: %v", err)
 		}
 	}
 
 	return c.SendStatus(http.StatusOK)
 }
 
-// PaystackWithdrawalCallback handles Paystack's POST when a transfer is settled.
-// POST /webhooks/payment/paystack/withdrawal
-func (h *Handler) PaystackWithdrawalCallback(c *fiber.Ctx) error {
-	var evt paystackWebhook
+// FlutterwaveWithdrawalCallback handles Flutterwave transfer notifications.
+// POST /webhooks/payment/flutterwave/withdrawal
+func (h *Handler) FlutterwaveWithdrawalCallback(c *fiber.Ctx) error {
+	var evt flutterwaveWebhook
 	if err := json.Unmarshal(c.Body(), &evt); err != nil {
 		return c.Status(http.StatusBadRequest).SendString("bad payload")
 	}
-	var data paystackTransferData
-	if err := json.Unmarshal(evt.Data, &data); err != nil {
-		return c.Status(http.StatusBadRequest).SendString("invalid data")
-	}
-	ref := data.Reference
-	if ref == "" {
-		ref = data.TransferCode
-	}
+	ref := firstNonEmpty(evt.Data.Reference, evt.Data.TxRef)
 	if ref == "" {
 		return c.SendStatus(http.StatusOK)
 	}
 
-	key := fmt.Sprintf("idempotency:paystack:withdrawal:%s", ref)
+	key := fmt.Sprintf("idempotency:flutterwave:withdrawal:%s", ref)
 	set, _ := h.rdb.SetNX(context.Background(), key, "1", 24*time.Hour).Result()
 	if !set {
 		return c.SendStatus(http.StatusOK)
@@ -377,15 +375,15 @@ func (h *Handler) PaystackWithdrawalCallback(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	status := strings.ToLower(evt.Event)
-	success := status == "transfer.success" || strings.EqualFold(data.Status, "success")
+	status := strings.ToLower(evt.Data.Status)
+	success := status == "successful" || strings.EqualFold(evt.Event, "transfer.completed")
 
 	if success {
 		log.Printf("[payments][withdraw][%s] webhook success", ref)
 		if err := h.settleWithdrawal(ctx, ref, true); err != nil {
 			log.Printf("withdrawal settle error: %v", err)
 		}
-	} else if status == "transfer.failed" || strings.EqualFold(data.Status, "failed") {
+	} else if status == "failed" || strings.EqualFold(evt.Event, "transfer.failed") {
 		log.Printf("[payments][withdraw][%s] webhook failure", ref)
 		if err := h.settleWithdrawal(ctx, ref, false); err != nil {
 			log.Printf("withdrawal revert error: %v", err)
@@ -396,12 +394,11 @@ func (h *Handler) PaystackWithdrawalCallback(c *fiber.Ctx) error {
 }
 
 // =============================================================================
-// BACKGROUND: Poll Paystack for PENDING payments (catches missed webhooks)
+// BACKGROUND: Poll Flutterwave for PENDING payments (catches missed webhooks)
 // =============================================================================
 
-// RunPaystackStatusPoller checks PENDING payments every 30s.
-// This ensures we never miss a settlement even if Paystack's webhook is late.
-func (h *Handler) RunPaystackStatusPoller(ctx context.Context) {
+// RunMoMoStatusPoller checks pending deposits/withdrawals every 30 seconds.
+func (h *Handler) RunMoMoStatusPoller(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -410,43 +407,89 @@ func (h *Handler) RunPaystackStatusPoller(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			h.pollPendingPayments(ctx)
+			h.pollPendingDeposits(ctx)
+			h.pollPendingWithdrawals(ctx)
 		}
 	}
 }
 
-func (h *Handler) pollPendingPayments(ctx context.Context) {
-	// Find payments stuck as PENDING for more than 2 minutes
+func (h *Handler) pollPendingDeposits(ctx context.Context) {
 	cutoff := time.Now().Add(-2 * time.Minute)
 	cursor, err := h.db.Collection("payment_events").Find(ctx, bson.M{
 		"status":    "PENDING",
+		"type":      "MOMO_DEPOSIT",
 		"createdAt": bson.M{"$lt": cutoff},
 	})
 	if err != nil {
-		log.Printf("poller: query error: %v", err)
+		log.Printf("deposit poller: query error: %v", err)
 		return
 	}
 	defer cursor.Close(ctx)
 
 	for cursor.Next(ctx) {
 		var event bson.M
-		if cursor.Decode(&event) != nil {
+		if err := cursor.Decode(&event); err != nil {
 			continue
 		}
 		ref, _ := event["_id"].(string)
-		status, err := h.paystackClient.GetTransactionStatus(ctx, ref)
-		if err != nil {
+		if ref == "" {
 			continue
 		}
-		if strings.EqualFold(status.Status, "success") {
-			if err := h.markMoMoDepositConfirmed(ctx, ref, status.Reference); err != nil {
-				log.Printf("poller confirm error: %v", err)
-				continue
+		tx, err := h.flutterClient.VerifyTransactionByReference(ctx, ref, ref)
+		if err != nil {
+			log.Printf("[payments][deposit-poller][%s] verify error: %v", ref, err)
+			continue
+		}
+		log.Printf("[payments][deposit-poller][%s] status=%s", ref, tx.Status)
+		if strings.EqualFold(tx.Status, "successful") {
+			if err := h.markMoMoDepositConfirmed(ctx, ref, tx.FlwRef); err != nil {
+				log.Printf("deposit poller confirm error: %v", err)
 			}
-			log.Printf("poller: recovered confirmed payment %s", ref)
-		} else if strings.EqualFold(status.Status, "failed") {
+		} else if strings.EqualFold(tx.Status, "failed") {
 			if err := h.markMoMoDepositFailed(ctx, ref); err != nil {
-				log.Printf("poller fail mark error: %v", err)
+				log.Printf("deposit poller fail error: %v", err)
+			}
+		}
+	}
+}
+
+func (h *Handler) pollPendingWithdrawals(ctx context.Context) {
+	cutoff := time.Now().Add(-2 * time.Minute)
+	cursor, err := h.db.Collection("withdrawals").Find(ctx, bson.M{
+		"status":    "PROCESSING",
+		"createdAt": bson.M{"$lt": cutoff},
+	})
+	if err != nil {
+		log.Printf("withdrawal poller: query error: %v", err)
+		return
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var record withdrawalRecord
+		if err := cursor.Decode(&record); err != nil {
+			continue
+		}
+		ref := record.ProviderRef
+		if ref == "" {
+			ref = record.LegacyPaystackRef
+		}
+		if ref == "" {
+			continue
+		}
+		transfer, err := h.flutterClient.GetTransferByReference(ctx, ref, ref)
+		if err != nil {
+			log.Printf("[payments][withdraw-poller][%s] verify error: %v", ref, err)
+			continue
+		}
+		log.Printf("[payments][withdraw-poller][%s] status=%s", ref, transfer.Status)
+		if strings.EqualFold(transfer.Status, "successful") {
+			if err := h.settleWithdrawal(ctx, ref, true); err != nil {
+				log.Printf("withdrawal poller settle error: %v", err)
+			}
+		} else if strings.EqualFold(transfer.Status, "failed") {
+			if err := h.settleWithdrawal(ctx, ref, false); err != nil {
+				log.Printf("withdrawal poller revert error: %v", err)
 			}
 		}
 	}
@@ -547,9 +590,6 @@ func (h *Handler) CryptoDepositCallback(c *fiber.Ctx) error {
 // WEBSOCKET — Real-time payment status push to Flutter client
 // =============================================================================
 
-// PaymentStatusWebSocket allows Flutter to subscribe to payment updates.
-// The client connects once and receives pushes when deposits/withdrawals settle.
-// GET /ws/payments (upgraded to WS)
 func (h *Handler) PaymentStatusWebSocket(c *websocket.Conn) {
 	userID := c.Locals("userId").(string)
 	channel := fmt.Sprintf("payment:user:%s", userID)
@@ -565,7 +605,8 @@ func (h *Handler) PaymentStatusWebSocket(c *websocket.Conn) {
 	}
 }
 
-// Additional route handlers (history, withdrawals list, etc.)
+// History + utility handlers (unchanged)
+
 func (h *Handler) GetPaymentHistory(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(string)
 	limit := parseLimit(c.Query("limit"), 20, 100)
@@ -652,24 +693,79 @@ func (h *Handler) GenerateCryptoAddress(c *fiber.Ctx) error {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	address, err := h.tatumClient.GenerateAddress(ctx, body.Coin)
+	// --- Get-or-Create: check if the user already has an address for this coin ---
+	var existing bson.M
+	err := h.db.Collection("crypto_wallets").FindOne(ctx, bson.M{
+		"userId": userID,
+		"coin":   body.Coin,
+	}).Decode(&existing)
+	if err == nil {
+		// Already has one — return it
+		return c.JSON(fiber.Map{
+			"address":   existing["address"],
+			"coin":      existing["coin"],
+			"network":   existing["network"],
+			"createdAt": existing["createdAt"],
+		})
+	}
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		return httpError(c, err)
+	}
+
+	// --- Derive next HD wallet index via atomic counter ---
+	counterKey := fmt.Sprintf("crypto_%s", strings.ToLower(body.Coin))
+	counterResult := h.db.Collection("crypto_counters").FindOneAndUpdate(
+		ctx,
+		bson.M{"_id": counterKey},
+		bson.M{"$inc": bson.M{"seq": int64(1)}},
+		options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
+	)
+	var counterDoc struct {
+		Seq int64 `bson:"seq"`
+	}
+	if err := counterResult.Decode(&counterDoc); err != nil {
+		return httpError(c, fmt.Errorf("failed to get derivation index: %w", err))
+	}
+	derivationIndex := counterDoc.Seq
+
+	// --- Generate address via Tatum ---
+	address, err := h.tatumClient.GenerateAddress(ctx, body.Coin, derivationIndex)
 	if err != nil {
-		return c.Status(http.StatusBadGateway).JSON(fiber.Map{"error": "address generation failed"})
+		return c.Status(http.StatusBadGateway).JSON(fiber.Map{"error": "address generation failed: " + err.Error()})
 	}
 
 	doc := bson.M{
-		"userId":     userID,
-		"coin":       body.Coin,
-		"network":    network,
-		"address":    address,
-		"createdAt":  time.Now(),
-		"derivation": fmt.Sprintf("user/%s/%d", userID, time.Now().Unix()),
+		"userId":          userID,
+		"coin":            body.Coin,
+		"network":         network,
+		"address":         address,
+		"derivationIndex": derivationIndex,
+		"status":          "ACTIVE",
+		"createdAt":       time.Now(),
 	}
 	if _, err := h.db.Collection("crypto_wallets").InsertOne(ctx, doc); err != nil {
 		return httpError(c, err)
+	}
+
+	// --- Register Tatum webhook subscription for this address (best-effort) ---
+	if h.cfg.CryptoWebhookURL != "" {
+		go func() {
+			subCtx, subCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer subCancel()
+			subID, err := h.tatumClient.CreateAddressSubscription(subCtx, body.Coin, address, h.cfg.CryptoWebhookURL)
+			if err != nil {
+				log.Printf("[crypto][address] webhook subscription failed for %s/%s: %v", body.Coin, address, err)
+				return
+			}
+			h.db.Collection("crypto_wallets").UpdateOne(context.Background(),
+				bson.M{"address": address},
+				bson.M{"$set": bson.M{"subscriptionId": subID}},
+			)
+			log.Printf("[crypto][address] webhook subscription created for %s/%s → %s", body.Coin, address, subID)
+		}()
 	}
 
 	return c.JSON(fiber.Map{
@@ -677,6 +773,102 @@ func (h *Handler) GenerateCryptoAddress(c *fiber.Ctx) error {
 		"coin":      body.Coin,
 		"network":   network,
 		"createdAt": doc["createdAt"],
+	})
+}
+
+func (h *Handler) GenerateAllCryptoWallets(c *fiber.Ctx) error {
+	var body struct {
+		UserID string `json:"userId"`
+	}
+	if err := c.BodyParser(&body); err != nil || body.UserID == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload or missing userId"})
+	}
+
+	coins := []string{"BTC", "ETH", "USDT"}
+	results := make(map[string]interface{})
+
+	// Fire them off synchronously; they are fast enough and happen in background anyway from auth's perspective.
+	for _, coin := range coins {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		network := defaultNetworks[coin]
+		if network == "" {
+			network = "L1"
+		}
+
+		// Check if exists
+		var existing bson.M
+		err := h.db.Collection("crypto_wallets").FindOne(ctx, bson.M{
+			"userId": body.UserID,
+			"coin":   coin,
+		}).Decode(&existing)
+		if err == nil {
+			results[coin] = existing["address"]
+			continue
+		}
+
+		// Derive next HD index
+		counterKey := fmt.Sprintf("crypto_%s", strings.ToLower(coin))
+		counterResult := h.db.Collection("crypto_counters").FindOneAndUpdate(
+			ctx,
+			bson.M{"_id": counterKey},
+			bson.M{"$inc": bson.M{"seq": int64(1)}},
+			options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
+		)
+		var counterDoc struct {
+			Seq int64 `bson:"seq"`
+		}
+		if err := counterResult.Decode(&counterDoc); err != nil {
+			results[coin] = fmt.Sprintf("error getting derivation index: %v", err)
+			continue
+		}
+		derivationIndex := counterDoc.Seq
+
+		// Generate via Tatum
+		address, err := h.tatumClient.GenerateAddress(ctx, coin, derivationIndex)
+		if err != nil {
+			results[coin] = fmt.Sprintf("tatum error: %v", err)
+			continue
+		}
+
+		doc := bson.M{
+			"userId":          body.UserID,
+			"coin":            coin,
+			"network":         network,
+			"address":         address,
+			"derivationIndex": derivationIndex,
+			"status":          "ACTIVE",
+			"createdAt":       time.Now(),
+		}
+		if _, err := h.db.Collection("crypto_wallets").InsertOne(ctx, doc); err != nil {
+			results[coin] = fmt.Sprintf("db insert error: %v", err)
+			continue
+		}
+
+		// Best-effort webhook
+		if h.cfg.CryptoWebhookURL != "" {
+			go func(c string, a string) {
+				subCtx, subCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer subCancel()
+				subID, err := h.tatumClient.CreateAddressSubscription(subCtx, c, a, h.cfg.CryptoWebhookURL)
+				if err != nil {
+					log.Printf("[crypto][generate-all] webhook sub failed for %s/%s: %v", c, a, err)
+					return
+				}
+				h.db.Collection("crypto_wallets").UpdateOne(context.Background(),
+					bson.M{"address": a},
+					bson.M{"$set": bson.M{"subscriptionId": subID}},
+				)
+			}(coin, address)
+		}
+
+		results[coin] = address
+	}
+
+	return c.JSON(fiber.Map{
+		"userId":  body.UserID,
+		"wallets": results,
 	})
 }
 
@@ -730,10 +922,10 @@ func shortID(id string) string {
 }
 
 func (h *Handler) isChannelSupported(channel string) bool {
-	if len(h.cfg.PaystackAllowedChannels) == 0 {
+	if len(h.cfg.MoMoAllowedChannels) == 0 {
 		return true
 	}
-	for _, ch := range h.cfg.PaystackAllowedChannels {
+	for _, ch := range h.cfg.MoMoAllowedChannels {
 		if ch == channel {
 			return true
 		}
@@ -741,13 +933,13 @@ func (h *Handler) isChannelSupported(channel string) bool {
 	return false
 }
 
-func (h *Handler) markMoMoDepositConfirmed(ctx context.Context, ref, txID string) error {
+func (h *Handler) markMoMoDepositConfirmed(ctx context.Context, ref, providerTxID string) error {
 	res := h.db.Collection("payment_events").FindOneAndUpdate(
 		ctx,
 		bson.M{"_id": ref, "status": bson.M{"$in": []string{"PENDING", "PROCESSING"}}},
 		bson.M{"$set": bson.M{
 			"status":       "CONFIRMED",
-			"paystackTxId": txID,
+			"providerTxId": providerTxID,
 			"settledAt":    time.Now(),
 			"updatedAt":    time.Now(),
 		}},
@@ -790,9 +982,15 @@ func (h *Handler) markMoMoDepositFailed(ctx context.Context, ref string) error {
 	return err
 }
 
-func (h *Handler) settleWithdrawal(ctx context.Context, paystackRef string, success bool) error {
+func (h *Handler) settleWithdrawal(ctx context.Context, providerRef string, success bool) error {
+	filter := bson.M{
+		"$or": []bson.M{
+			{"providerRef": providerRef},
+			{"paystackRef": providerRef},
+		},
+	}
 	var rec withdrawalRecord
-	err := h.db.Collection("withdrawals").FindOne(ctx, bson.M{"paystackRef": paystackRef}).Decode(&rec)
+	err := h.db.Collection("withdrawals").FindOne(ctx, filter).Decode(&rec)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return nil
 	}
@@ -825,6 +1023,120 @@ func (h *Handler) settleWithdrawal(ctx context.Context, paystackRef string, succ
 	return nil
 }
 
+// =============================================================================
+// INTERNAL: Crypto Master Wallet Configuration
+// =============================================================================
+
+// SaveCryptoWalletConfig stores or updates master wallet config per coin.
+// Protected by RequireInternalKey middleware.
+// POST /internal/crypto/wallets/config
+func (h *Handler) SaveCryptoWalletConfig(c *fiber.Ctx) error {
+	var body struct {
+		Coin     string `json:"coin"`
+		Xpub     string `json:"xpub"`
+		Mnemonic string `json:"mnemonic"`
+		Network  string `json:"network"`
+		Active   *bool  `json:"active"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
+	}
+
+	body.Coin = strings.ToUpper(strings.TrimSpace(body.Coin))
+	if body.Coin == "" || body.Xpub == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "coin and xpub are required"})
+	}
+
+	if body.Network == "" {
+		body.Network = defaultNetworks[body.Coin]
+		if body.Network == "" {
+			body.Network = "L1"
+		}
+	}
+
+	active := true
+	if body.Active != nil {
+		active = *body.Active
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	update := bson.M{
+		"$set": bson.M{
+			"coin":      body.Coin,
+			"xpub":      body.Xpub,
+			"network":   strings.ToUpper(body.Network),
+			"active":    active,
+			"updatedAt": time.Now(),
+		},
+		"$setOnInsert": bson.M{
+			"createdAt": time.Now(),
+		},
+	}
+
+	// Store mnemonic only if provided
+	if body.Mnemonic != "" {
+		update["$set"].(bson.M)["mnemonic"] = body.Mnemonic
+	}
+
+	result, err := h.db.Collection("crypto_master_wallets").UpdateByID(
+		ctx,
+		body.Coin, // _id = coin name
+		update,
+		options.Update().SetUpsert(true),
+	)
+	if err != nil {
+		return httpError(c, fmt.Errorf("failed to save wallet config: %w", err))
+	}
+
+	action := "updated"
+	if result.UpsertedCount > 0 {
+		action = "created"
+	}
+
+	log.Printf("[crypto][config] %s master wallet config for %s (xpub=%s...)", action, body.Coin, body.Xpub[:12])
+	return c.JSON(fiber.Map{
+		"status": action,
+		"coin":   body.Coin,
+	})
+}
+
+// GetCryptoWalletConfig retrieves all stored master wallet configs.
+// Mnemonics are masked for safety — only first/last 4 chars shown.
+// GET /internal/crypto/wallets/config
+func (h *Handler) GetCryptoWalletConfig(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := h.db.Collection("crypto_master_wallets").Find(ctx, bson.M{})
+	if err != nil {
+		return httpError(c, err)
+	}
+	defer cursor.Close(ctx)
+
+	var configs []bson.M
+	if err := cursor.All(ctx, &configs); err != nil {
+		return httpError(c, err)
+	}
+
+	// Mask mnemonics for safety
+	for _, cfg := range configs {
+		if mnemonic, ok := cfg["mnemonic"].(string); ok && mnemonic != "" {
+			words := strings.Fields(mnemonic)
+			if len(words) > 4 {
+				cfg["mnemonic"] = fmt.Sprintf("%s %s ... %s %s [%d words]",
+					words[0], words[1], words[len(words)-2], words[len(words)-1], len(words))
+			}
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"wallets": configs,
+		"count":   len(configs),
+	})
+}
+
 func (h *Handler) publishPaymentEvent(userID string, payload interface{}) {
 	if userID == "" {
 		return
@@ -847,22 +1159,217 @@ func stringID(v interface{}) string {
 	}
 }
 
-func toMinorUnits(amount float64) int64 {
+func networkFromChannel(channel string) string {
+	switch channel {
+	case "mtn-gh", "mtn":
+		return "MTN"
+	case "vodafone-gh", "vodafone", "telecel-gh", "telecel":
+		return "VODAFONE"
+	case "airteltigo-gh", "airteltigo", "airtel", "tigo":
+		return "TIGO"
+	default:
+		return strings.ToUpper(strings.TrimSuffix(channel, "-gh"))
+	}
+}
+
+func normalizeChannel(channel string) string {
+	channel = strings.TrimSpace(strings.ToLower(channel))
+	if channel == "" {
+		return ""
+	}
+	if strings.HasSuffix(channel, "-gh") {
+		return channel
+	}
+	if channel == "vodafone" {
+		return "vodafone-gh"
+	}
+	if channel == "mtn" {
+		return "mtn-gh"
+	}
+	if channel == "airteltigo" || channel == "airtel" || channel == "tigo" {
+		return "airteltigo-gh"
+	}
+	return channel
+}
+
+func roundMoney(amount float64) float64 {
 	if amount <= 0 {
 		return 0
 	}
-	return int64(math.Round(amount * 100))
+	return math.Round(amount*100) / 100
 }
 
-func providerFromChannel(channel string) string {
-	switch strings.ToLower(channel) {
-	case "mtn-gh", "mtn":
-		return "mtn"
-	case "vodafone-gh", "vodafone", "telecel-gh", "telecel":
-		return "vodafone"
-	case "airteltigo-gh", "airteltigo", "airtel", "tigo":
-		return "airtel"
-	default:
-		return strings.TrimSuffix(strings.ToLower(channel), "-gh")
+func normalizePhone(phone string) string {
+	if phone == "" {
+		return ""
+	}
+	phone = strings.ReplaceAll(phone, " ", "")
+	phone = strings.ReplaceAll(phone, "-", "")
+	phone = strings.TrimSpace(phone)
+	return phone
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+// =============================================================================
+// BACKGROUND: Crypto Deposit Watcher (polls blockchain explorer)
+// =============================================================================
+
+// RunCryptoDepositWatcher polls all active crypto wallet addresses for
+// incoming transactions. This is the safety net alongside Tatum webhooks.
+func (h *Handler) RunCryptoDepositWatcher(ctx context.Context) {
+	interval := time.Duration(h.cfg.CryptoWatcherInterval) * time.Second
+	if interval < 10*time.Second {
+		interval = 60 * time.Second
+	}
+	log.Printf("[crypto-watcher] starting with interval=%v", interval)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			h.pollCryptoDeposits(ctx)
+		}
+	}
+}
+
+func (h *Handler) pollCryptoDeposits(ctx context.Context) {
+	cursor, err := h.db.Collection("crypto_wallets").Find(ctx, bson.M{
+		"status": "ACTIVE",
+	})
+	if err != nil {
+		log.Printf("[crypto-watcher] query error: %v", err)
+		return
+	}
+	defer cursor.Close(ctx)
+
+	for cursor.Next(ctx) {
+		var walletDoc bson.M
+		if err := cursor.Decode(&walletDoc); err != nil {
+			continue
+		}
+
+		address, _ := walletDoc["address"].(string)
+		coin, _ := walletDoc["coin"].(string)
+		userID := stringID(walletDoc["userId"])
+		if address == "" || coin == "" || userID == "" {
+			continue
+		}
+
+		txs, err := h.tatumClient.GetTransactionsByAddress(ctx, coin, address)
+		if err != nil {
+			log.Printf("[crypto-watcher] %s/%s tx lookup error: %v", coin, address[:8], err)
+			continue
+		}
+
+		for _, tx := range txs {
+			if tx.Hash == "" {
+				continue
+			}
+			h.processCryptoTx(ctx, userID, coin, address, tx)
+		}
+	}
+}
+
+func (h *Handler) processCryptoTx(ctx context.Context, userID, coin, address string, tx tatum.Transaction) {
+	// Parse amount from the transaction
+	amountStr := tx.Amount
+	if amountStr == "" {
+		amountStr = tx.Value
+	}
+	amountCrypto, _ := strconv.ParseFloat(amountStr, 64)
+	if amountCrypto <= 0 {
+		return
+	}
+
+	// Determine confirmation status
+	required := confirmationThreshold[coin]
+	if required == 0 {
+		required = 3
+	}
+	status := "PENDING"
+	if tx.Confirmations >= required {
+		status = "CONFIRMED"
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"userId":        userID,
+			"coin":          coin,
+			"address":       address,
+			"amountCrypto":  amountCrypto,
+			"confirmations": tx.Confirmations,
+			"status":        status,
+			"updatedAt":     time.Now(),
+		},
+		"$setOnInsert": bson.M{
+			"createdAt": time.Now(),
+		},
+	}
+
+	if status == "CONFIRMED" {
+		// ATOMIC: FindOneAndUpdate with status guard.
+		// Only matches documents that are NOT yet CONFIRMED.
+		// If another goroutine already confirmed this tx, FindOneAndUpdate
+		// returns ErrNoDocuments and we skip the credit.
+		res := h.db.Collection("crypto_deposits").FindOneAndUpdate(ctx,
+			bson.M{
+				"_id":    tx.Hash,
+				"status": bson.M{"$ne": "CONFIRMED"},
+			},
+			update,
+			options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
+		)
+		var doc bson.M
+		if err := res.Decode(&doc); err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				// Already confirmed by another poll cycle or webhook — skip
+				return
+			}
+			log.Printf("[crypto-watcher] atomic upsert deposit %s error: %v", tx.Hash, err)
+			return
+		}
+
+		// Credit the user's wallet — this branch only executes once per tx
+		amountUsd := amountCrypto // In production, convert via price feed
+		if err := h.walletClient.CreditDeposit(ctx, wallet.CreditRequest{
+			UserID:    userID,
+			AmountUsd: amountUsd,
+			Source:    fmt.Sprintf("CRYPTO_%s", coin),
+			Reference: tx.Hash,
+		}); err != nil {
+			// Roll back the status so the next poll retries
+			h.db.Collection("crypto_deposits").UpdateByID(ctx, tx.Hash,
+				bson.M{"$set": bson.M{"status": "PENDING", "updatedAt": time.Now()}},
+			)
+			log.Printf("[crypto-watcher] credit deposit %s error (rolled back): %v", tx.Hash, err)
+			return
+		}
+		h.publishPaymentEvent(userID, fiber.Map{
+			"type":         "CRYPTO_DEPOSIT_CONFIRMED",
+			"amountCrypto": amountCrypto,
+			"coin":         coin,
+			"txHash":       tx.Hash,
+		})
+		log.Printf("[crypto-watcher] ✓ credited user=%s coin=%s amount=%.8f tx=%s", userID, coin, amountCrypto, tx.Hash)
+	} else {
+		// Still pending — just upsert the tracking record
+		if _, err := h.db.Collection("crypto_deposits").UpdateByID(
+			ctx, tx.Hash, update,
+			options.Update().SetUpsert(true),
+		); err != nil {
+			log.Printf("[crypto-watcher] upsert pending deposit %s error: %v", tx.Hash, err)
+		}
 	}
 }

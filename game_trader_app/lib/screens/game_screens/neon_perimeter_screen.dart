@@ -19,9 +19,6 @@ class NeonPerimeterScreen extends StatefulWidget {
 
 class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
     with TickerProviderStateMixin {
-  static const int _minMinutes = 3;
-  static const int _maxMinutes = 15;
-
   int _selectedTabIndex = 0;
   final int _durationMinutes = 5;
 
@@ -142,7 +139,7 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
       final win = event.outcome.toUpperCase() == 'WIN';
       setState(() {
         _status = win
-            ? 'IN zone held steady! +\$${event.payoutUsd.toStringAsFixed(2)}'
+            ? 'IN zone held steady! +\$${event.winAmountUsd.toStringAsFixed(2)}'
             : 'Round ended ${event.outcome}.';
         _activeSessionId = null;
         _activeTraceId = null;
@@ -174,7 +171,7 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
         ),
         content: Text(
           win
-              ? 'Payout: \$${event.payoutUsd.toStringAsFixed(2)}'
+              ? 'Winnings: \$${event.winAmountUsd.toStringAsFixed(2)}'
               : 'No payout this round.',
           style: const TextStyle(color: Colors.white),
         ),

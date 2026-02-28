@@ -20,9 +20,9 @@ import (
 
 	"gamehub/payment-gateway/internal/auth"
 	"gamehub/payment-gateway/internal/config"
+	"gamehub/payment-gateway/internal/flutterwave"
 	"gamehub/payment-gateway/internal/handler"
 	"gamehub/payment-gateway/internal/middleware"
-	"gamehub/payment-gateway/internal/paystack"
 	"gamehub/payment-gateway/internal/tatum"
 	"gamehub/payment-gateway/internal/wallet"
 )
@@ -45,7 +45,7 @@ func main() {
 
 	// Idempotency indexes — prevents double-processing of any payment event
 	db.Collection("payment_events").Indexes().CreateMany(context.Background(), []mongo.IndexModel{
-		// reference = Paystack clientReference or txHash — must be globally unique
+		// reference = Flutterwave clientReference or txHash — must be globally unique
 		{Keys: bson.D{{Key: "reference", Value: 1}}, Options: options.Index().SetUnique(true)},
 		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "status", Value: 1}, {Key: "createdAt", Value: -1}}},
 	})
@@ -71,21 +71,36 @@ func main() {
 	})
 
 	// --- External Clients ---
-	// Paystack: Mobile Money deposits + withdrawals
-	paystackClient := paystack.NewClient(cfg.PaystackSecretKey, cfg.PaystackBaseURL, cfg.PaystackSubaccount)
+	// Flutterwave: Mobile Money deposits + withdrawals
+	flutterwaveClient := flutterwave.NewClient(
+		cfg.FlutterwaveSecretKey,
+		cfg.FlutterwaveBaseURL,
+		cfg.FlutterwaveTransferBaseURL,
+	)
 
 	// Tatum: Blockchain monitoring for crypto deposits
-	tatumClient := tatum.NewClient(cfg.TatumAPIKey)
+	tatumClient := tatum.NewClient(
+		cfg.TatumAPIKey,
+		cfg.TatumBaseURL,
+		cfg.TatumBTCXpub,
+		cfg.TatumETHXpub,
+		cfg.TatumTRONXpub,
+		cfg.TatumTestnet,
+	)
 
 	// Wallet service client: called directly over HTTP after payment confirms
 	walletClient := wallet.NewHTTPClient(cfg.WalletServiceURL, cfg.InternalServiceKey)
 
 	// --- Handler ---
-	h := handler.New(db, rdb, paystackClient, tatumClient, walletClient, cfg)
+	h := handler.New(db, rdb, flutterwaveClient, tatumClient, walletClient, cfg)
 
-	// --- Background: Poll Paystack for pending payment statuses ---
+	// --- Background: Poll Flutterwave for pending payment statuses ---
 	// Webhooks can occasionally be delayed — this ensures we don't miss confirmations
-	go h.RunPaystackStatusPoller(context.Background())
+	go h.RunMoMoStatusPoller(context.Background())
+
+	// --- Background: Poll blockchain explorers for crypto deposits ---
+	// Safety net alongside Tatum webhooks
+	go h.RunCryptoDepositWatcher(context.Background())
 
 	// --- Fiber App ---
 	app := fiber.New(fiber.Config{
@@ -105,8 +120,8 @@ func main() {
 	// ==========================================================================
 	v1 := app.Group("/api/v1/payments", middleware.RequireAuth(tokenValidator))
 
-	// --- Mobile Money (Paystack) ---
-	// Initiate a deposit: triggers Paystack charge → MoMo prompt on phone
+	// --- Mobile Money (Flutterwave) ---
+	// Initiate a deposit: triggers Flutterwave charge → MoMo prompt on phone
 	v1.Post("/momo/deposit", h.InitiateMoMoDeposit)
 	// Check status of a specific payment by client reference
 	v1.Get("/momo/status/:reference", h.GetMoMoStatus)
@@ -129,16 +144,16 @@ func main() {
 	// ==========================================================================
 	webhooks := app.Group("/webhooks/payment")
 
-	// Paystack fires this when user completes MoMo payment
-	webhooks.Post("/paystack",
-		middleware.VerifyPaystackHMAC(cfg),
-		h.PaystackDepositCallback,
+	// Flutterwave fires this when user completes MoMo payment
+	webhooks.Post("/flutterwave",
+		middleware.VerifyFlutterwaveHMAC(cfg),
+		h.FlutterwaveDepositCallback,
 	)
 
-	// Paystack fires this when a transfer (withdrawal) is processed
-	webhooks.Post("/paystack/withdrawal",
-		middleware.VerifyPaystackHMAC(cfg),
-		h.PaystackWithdrawalCallback,
+	// Flutterwave fires this when a transfer (withdrawal) is processed
+	webhooks.Post("/flutterwave/withdrawal",
+		middleware.VerifyFlutterwaveHMAC(cfg),
+		h.FlutterwaveWithdrawalCallback,
 	)
 
 	// Tatum fires this when a crypto tx reaches required confirmations
@@ -154,6 +169,13 @@ func main() {
 
 	// Wallet service calls this after a game win to check pending withdrawals
 	internal.Get("/withdrawals/pending/:userId", h.GetPendingWithdrawals)
+
+	// Crypto master wallet config (store/retrieve xpubs + mnemonics)
+	internal.Post("/crypto/wallets/config", h.SaveCryptoWalletConfig)
+	internal.Get("/crypto/wallets/config", h.GetCryptoWalletConfig)
+
+	// JIT Wallet Generation for new users (called by auth-service)
+	internal.Post("/crypto/wallets/generate-all", h.GenerateAllCryptoWallets)
 
 	// ==========================================================================
 	// WEBSOCKET — real-time payment status updates to connected Flutter clients

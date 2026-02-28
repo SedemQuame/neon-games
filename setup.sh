@@ -84,6 +84,7 @@ cmd_services() {
   cmd_init
   docker compose -f "${COMPOSE_FILE}" up -d \
     auth-service \
+    passport-auth \
     wallet-service \
     payment-gateway \
     game-session-service \

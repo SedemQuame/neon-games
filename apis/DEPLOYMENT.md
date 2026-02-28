@@ -90,7 +90,7 @@ make setup
 # 3. Fill in your credentials
 nano .env
 #  - Set DERIV_APP_ID
-#  - Set PAYSTACK_SECRET_KEY, TATUM_API_KEY, etc.
+#  - Set FLUTTERWAVE_TEST_SECRET_KEY, TATUM_API_KEY, etc.
 #  - Change all *_PASSWORD values from defaults
 
 # 4. Start everything
@@ -139,8 +139,9 @@ All services share a common `.env` file at `apis/.env`. The file is loaded by Do
 | `JWT_REFRESH_TTL_DAYS` | ✅ | Refresh token TTL (default: 7) |
 | `DERIV_APP_ID` | ✅ | Your registered Deriv application ID |
 | `DERIV_WS_URL` | ✅ | Deriv WebSocket endpoint |
-| `PAYSTACK_SECRET_KEY` | ✅ | Paystack secret for MoMo charges |
-| `PAYSTACK_WEBHOOK_SECRET` | ✅ | HMAC secret for Paystack webhooks |
+| `FLUTTERWAVE_TEST_SECRET_KEY` | ✅ | Flutterwave secret for MoMo charges (test). Use live variant in production. |
+| `FLUTTERWAVE_TEST_PUBLIC_KEY` | ✅ | Flutterwave public key used by the mobile app. |
+| `FLUTTERWAVE_WEBHOOK_SECRET` | ✅ | `verif-hash` secret for Flutterwave webhooks |
 | `TATUM_API_KEY` | ✅ | Tatum API key for blockchain monitoring |
 | `TATUM_WEBHOOK_SECRET` | ✅ | HMAC secret for Tatum webhooks |
 | `DERIV_ACCOUNT_1_TOKEN` | ✅ | Deriv API token for first pool account |
@@ -195,7 +196,7 @@ make up
 - Nginx configured with real domain + Let's Encrypt TLS (Certbot)
 - MongoDB Atlas M10 (shared) cluster
 - Real Deriv app ID but smaller account pool
-- Webhook endpoints exposed and tested with real Paystack/Tatum events
+- Webhook endpoints exposed and tested with real Flutterwave/Tatum events
 
 ### Stage 3 — Production (Kubernetes on EKS)
 - See Section 6 below

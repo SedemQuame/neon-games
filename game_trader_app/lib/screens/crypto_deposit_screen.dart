@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+
 import '../app_theme.dart';
+import '../services/api_client.dart';
+import '../services/models.dart';
+import '../services/session_manager.dart';
 
 class CryptoDepositScreen extends StatefulWidget {
   const CryptoDepositScreen({super.key});
@@ -11,33 +17,86 @@ class CryptoDepositScreen extends StatefulWidget {
 
 class _CryptoDepositScreenState extends State<CryptoDepositScreen> {
   String _selectedCoin = 'BTC';
+  bool _loading = false;
+  String? _error;
+  CryptoAddress? _address;
+
   final Map<String, Map<String, dynamic>> _coins = {
     'BTC': {
       'name': 'Bitcoin (BTC)',
       'icon': Icons.currency_bitcoin,
       'color': Colors.orange,
       'network': 'Bitcoin Network',
-      'address': '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2',
     },
     'ETH': {
       'name': 'Ethereum (ETH)',
-      'icon': Icons.diamond, // Close enough to ETH icon
+      'icon': Icons.diamond,
       'color': Colors.blueAccent,
       'network': 'ERC20 Network',
-      'address': '0x71C7656EC7ab88b098defB751B7401B5f6d8976F',
     },
     'USDT': {
       'name': 'Tether (USDT)',
       'icon': Icons.attach_money,
       'color': Colors.green,
       'network': 'TRC20 Network',
-      'address': 'TMuA6YqfCeX8UkEG2sTrM5uYZ1oV9x7t4m',
     },
   };
 
   @override
+  void initState() {
+    super.initState();
+    // Generate address for default coin on screen load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _generateAddress();
+    });
+  }
+
+  Future<void> _generateAddress() async {
+    final session = context.read<SessionManager>();
+    final token = session.session?.accessToken;
+    if (token == null) {
+      setState(() => _error = 'Please sign in to generate a deposit address.');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _address = null;
+    });
+
+    try {
+      final address = await session.paymentService.generateCryptoAddress(
+        token: token,
+        coin: _selectedCoin,
+      );
+      if (mounted) {
+        setState(() {
+          _address = address;
+          _loading = false;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.message;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to generate address. Please try again.';
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final coinData = _coins[_selectedCoin]!;
+    final displayAddress = _address?.address ?? '';
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
@@ -127,10 +186,12 @@ class _CryptoDepositScreenState extends State<CryptoDepositScreen> {
                                 );
                               }).toList(),
                               onChanged: (String? newValue) {
-                                if (newValue != null) {
+                                if (newValue != null &&
+                                    newValue != _selectedCoin) {
                                   setState(() {
                                     _selectedCoin = newValue;
                                   });
+                                  _generateAddress();
                                 }
                               },
                             ),
@@ -143,13 +204,13 @@ class _CryptoDepositScreenState extends State<CryptoDepositScreen> {
                     // Network Selector
                     _buildDropdownField(
                       label: 'Network',
-                      value: coinData['network'] as String,
+                      value: _address?.network ?? coinData['network'] as String,
                       icon: Icons.hub,
                       iconColor: Colors.blueAccent,
                     ),
                     const SizedBox(height: 32),
 
-                    // QR Code Area
+                    // QR Code / Loading / Error Area
                     Center(
                       child: Container(
                         width: 200,
@@ -167,107 +228,231 @@ class _CryptoDepositScreenState extends State<CryptoDepositScreen> {
                             ),
                           ],
                         ),
-                        child: const Center(
-                          // Placeholder for QR code
-                          child: Icon(
-                            Icons.qr_code_2,
-                            size: 160,
-                            color: Colors.black87,
+                        child: _loading
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    CircularProgressIndicator(
+                                      color: coinData['color'] as Color,
+                                      strokeWidth: 3,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'Generating\naddress...',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : _error != null
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Icons.error_outline,
+                                        size: 40,
+                                        color: Colors.redAccent,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Tap to retry',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : Center(
+                                child: QrImageView(
+                                  data: _address!.address,
+                                  version: QrVersions.auto,
+                                  size: 160.0,
+                                  dataModuleStyle: const QrDataModuleStyle(
+                                    dataModuleShape: QrDataModuleShape.square,
+                                    color: Colors.black87,
+                                  ),
+                                  eyeStyle: const QrEyeStyle(
+                                    eyeShape: QrEyeShape.square,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ),
+
+                    // Retry button on error
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: _generateAddress,
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Retry'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.primaryColor,
                           ),
                         ),
                       ),
-                    ),
+                      Center(
+                        child: Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 32),
 
-                    // Deposit Address
-                    const Padding(
-                      padding: EdgeInsets.only(left: 4, bottom: 8),
-                      child: Text(
-                        'Deposit Address',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFcbd5e1),
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceDark,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.borderDark),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              coinData['address'] as String,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              Clipboard.setData(
-                                ClipboardData(
-                                  text: coinData['address'] as String,
-                                ),
-                              );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Address copied to clipboard'),
-                                  backgroundColor: AppTheme.primaryColor,
-                                ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryColor.withValues(
-                                  alpha: 0.1,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.copy,
-                                size: 16,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                    // Deposit Address and Copy Button
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.orange,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            'Send only ${coinData['name']} to this deposit address. Sending coin or token other than $_selectedCoin to this address may result in the loss of your deposit.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white.withValues(alpha: 0.6),
-                              height: 1.5,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.surfaceDark,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppTheme.borderDark),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Deposit Address',
+                                  style: TextStyle(
+                                    color: Color(0xFFcbd5e1),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  displayAddress.isEmpty
+                                      ? 'Generating...'
+                                      : displayAddress,
+                                  style: TextStyle(
+                                    color: displayAddress.isEmpty
+                                        ? Colors.grey
+                                        : Colors.white,
+                                    fontSize: 14,
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Copy Button
+                        Material(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            onTap: () {
+                              if (displayAddress.isNotEmpty) {
+                                Clipboard.setData(
+                                  ClipboardData(text: displayAddress),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '$_selectedCoin address copied to clipboard',
+                                    ),
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: AppTheme.primaryColor.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(
+                                Icons.copy_rounded,
+                                color: AppTheme.primaryColor,
+                                size: 24,
+                              ),
                             ),
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Important Notes
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceDark,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppTheme.borderDark),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                color: coinData['color'] as Color,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Important',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoRow(
+                            'Send only $_selectedCoin to this address.',
+                          ),
+                          _buildInfoRow(
+                            'Ensure you use the ${coinData['network']} network.',
+                          ),
+                          _buildInfoRow(
+                            'Deposits will be credited automatically after network confirmations.',
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 48),
                   ],
@@ -368,6 +553,37 @@ class _CryptoDepositScreenState extends State<CryptoDepositScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInfoRow(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 6),
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.5),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

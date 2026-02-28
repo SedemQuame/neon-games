@@ -178,13 +178,29 @@ class GameService {
         case 'GAME_RESULT':
           final payload =
               decoded['payload'] as Map<String, dynamic>? ?? decoded;
+          final stakeUsd = (payload['stakeUsd'] as num?)?.toDouble() ?? 0;
+          final payoutUsd = (payload['payoutUsd'] as num?)?.toDouble() ?? 0;
+          final outcome = payload['outcome']?.toString() ?? '';
+          double winAmountUsd =
+              (payload['winAmountUsd'] as num?)?.toDouble() ?? double.nan;
+          if (winAmountUsd.isNaN) {
+            if (outcome.toUpperCase() == 'WIN') {
+              winAmountUsd = payoutUsd - stakeUsd;
+            } else {
+              winAmountUsd = 0;
+            }
+          }
+          if (winAmountUsd < 0) {
+            winAmountUsd = 0;
+          }
           final result = GameResultEvent(
             sessionId: payload['sessionId']?.toString() ?? '',
             userId: payload['userId']?.toString() ?? '',
             gameType: payload['gameType']?.toString() ?? '',
-            outcome: payload['outcome']?.toString() ?? '',
-            payoutUsd: (payload['payoutUsd'] as num?)?.toDouble() ?? 0,
-            stakeUsd: (payload['stakeUsd'] as num?)?.toDouble() ?? 0,
+            outcome: outcome,
+            payoutUsd: payoutUsd,
+            winAmountUsd: winAmountUsd,
+            stakeUsd: stakeUsd,
             newBalance: (payload['newBalance'] as num?)?.toDouble() ?? 0,
             traceId: payload['traceId']?.toString() ?? '',
             derivContractId: payload['derivContractId']?.toString(),
@@ -192,7 +208,8 @@ class GameService {
           event = result;
           AppLogger.instance.log(
             'ws',
-            '[${result.traceId}] result ${result.outcome} stake=${result.stakeUsd} payout=${result.payoutUsd}',
+            '[${result.traceId}] result ${result.outcome} stake=${result.stakeUsd} '
+            'payout=${result.payoutUsd} win=${result.winAmountUsd}',
           );
           emitEvent = true;
           break;
@@ -291,6 +308,7 @@ class GameResultEvent extends GameEvent {
     required this.gameType,
     required this.outcome,
     required this.payoutUsd,
+    required this.winAmountUsd,
     required this.stakeUsd,
     required this.newBalance,
     required this.traceId,
@@ -302,6 +320,7 @@ class GameResultEvent extends GameEvent {
   final String gameType;
   final String outcome;
   final double payoutUsd;
+  final double winAmountUsd;
   final double stakeUsd;
   final double newBalance;
   final String traceId;

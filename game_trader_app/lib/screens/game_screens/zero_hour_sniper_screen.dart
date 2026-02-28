@@ -521,13 +521,13 @@ class _ZeroHourSniperScreenState extends State<ZeroHourSniperScreen>
     setState(() {
       _isFiring = false;
       _statusMessage = win
-          ? 'Impact confirmed +\$${event.payoutUsd.toStringAsFixed(2)}'
+          ? 'Impact confirmed +\$${event.winAmountUsd.toStringAsFixed(2)}'
           : 'Shot settled ${event.outcome}';
     });
     showGameMessage(
       context,
       win
-          ? 'Sniper shot paid \$${event.payoutUsd.toStringAsFixed(2)}'
+          ? 'Sniper shot paid \$${event.winAmountUsd.toStringAsFixed(2)}'
           : 'Sniper shot closed as ${event.outcome}',
     );
   }

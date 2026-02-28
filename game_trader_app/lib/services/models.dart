@@ -73,17 +73,26 @@ class MoMoDepositResponse {
     required this.reference,
     required this.message,
     required this.status,
+    required this.providerReference,
+    this.providerRedirectUrl,
+    this.providerAuthMode,
   });
 
   final String reference;
   final String message;
   final String status;
+  final String providerReference;
+  final String? providerRedirectUrl;
+  final String? providerAuthMode;
 
   factory MoMoDepositResponse.fromJson(Map<String, dynamic> json) {
     return MoMoDepositResponse(
       reference: json['reference']?.toString() ?? '',
       message: json['message']?.toString() ?? '',
       status: json['status']?.toString() ?? 'PENDING',
+      providerReference: json['providerReference']?.toString() ?? '',
+      providerRedirectUrl: json['providerRedirectUrl']?.toString(),
+      providerAuthMode: json['providerAuthMode']?.toString(),
     );
   }
 }

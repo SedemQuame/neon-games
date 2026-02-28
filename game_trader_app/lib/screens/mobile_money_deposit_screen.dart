@@ -306,17 +306,18 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
   }
 
   Future<void> _submitPayment(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
     final session = context.read<SessionManager>();
     final token = session.session?.accessToken;
     if (token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Please sign in to continue')),
       );
       return;
     }
     final amount = double.tryParse(_amountController.text) ?? 0;
     if (amount <= 0 || _phoneController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Enter valid phone and amount')),
       );
       return;
@@ -329,18 +330,13 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
         amount: amount,
         channel: _mapNetworkToChannel(selectedNetwork),
       );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('Prompt sent! Ref ${response.reference}')),
       );
     } on ApiException catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Payment failed: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Payment failed: $e')));
     } finally {
       if (mounted) {
         setState(() => _loading = false);

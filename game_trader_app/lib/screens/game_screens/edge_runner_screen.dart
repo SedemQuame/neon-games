@@ -525,13 +525,13 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
       _isPlacing = false;
       _activeMode = null;
       _statusMessage = win
-          ? '$label cleared +\$${event.payoutUsd.toStringAsFixed(2)}'
+          ? '$label cleared +\$${event.winAmountUsd.toStringAsFixed(2)}'
           : '$label settled ${event.outcome}';
     });
     showGameMessage(
       context,
       win
-          ? '$label paid \$${event.payoutUsd.toStringAsFixed(2)}'
+          ? '$label paid \$${event.winAmountUsd.toStringAsFixed(2)}'
           : '$label closed as ${event.outcome}',
     );
   }

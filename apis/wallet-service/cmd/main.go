@@ -106,7 +106,7 @@ func main() {
 	// Called by payment-gateway when deposit confirmed
 	internal.Post("/ledger/credit", h.InternalCreditDeposit)
 
-	// Called by payment-gateway: locks funds before initiating Paystack withdrawal
+	// Called by payment-gateway: locks funds before initiating Flutterwave withdrawal
 	internal.Post("/ledger/reserve-withdrawal", h.InternalReserveWithdrawal)
 
 	// Called by payment-gateway: finalises or refunds a withdrawal reservation

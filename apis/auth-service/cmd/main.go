@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -8,11 +9,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -35,6 +38,8 @@ var (
 	rdb        *redis.Client
 	jwtManager *token.Manager
 	mailClient *mailer.Client
+
+	usernameSanitizer = regexp.MustCompile(`[^a-z0-9]+`)
 )
 
 const (
@@ -196,7 +201,7 @@ func handleRequestOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: Call Hubtel SMS API to deliver the code
-		// hubtelSMS.Send(body.Phone, "Your Glory Grid OTP: "+code)
+	// hubtelSMS.Send(body.Phone, "Your Glory Grid OTP: "+code)
 
 	respondJSON(w, 200, map[string]string{"message": "OTP sent to " + body.Phone})
 }
@@ -246,6 +251,9 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 		respondError(w, 500, "user id missing")
 		return
 	}
+
+	// Trigger async JIT wallet generation (BTC, ETH, USDT)
+	triggerWalletGeneration(userID)
 
 	// Issue tokens
 	accessToken, refreshToken, err := issueTokenPair(ctx, userID, "user")
@@ -308,6 +316,10 @@ func handleEmailRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := res.InsertedID.(primitive.ObjectID).Hex()
+
+	// Trigger async JIT wallet generation (BTC, ETH, USDT)
+	triggerWalletGeneration(userID)
+
 	accessToken, refreshToken, err := issueTokenPair(ctx, userID, "user")
 	if err != nil {
 		respondError(w, 500, "failed to issue tokens")
@@ -619,6 +631,8 @@ func setupIndexes() {
 		{Keys: bson.D{{Key: "phone", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
 		{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
 		{Keys: bson.D{{Key: "googleId", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
+		{Keys: bson.D{{Key: "facebookId", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
+		{Keys: bson.D{{Key: "appleId", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
 	})
 	db.Collection("otps").Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
@@ -794,7 +808,7 @@ func sanitizeUser(user bson.M) map[string]interface{} {
 	if id, err := extractUserID(user); err == nil {
 		out["id"] = id
 	}
-	for _, k := range []string{"username", "email", "phone", "tier", "kycStatus", "isGuest", "authProviders"} {
+	for _, k := range []string{"username", "fullName", "email", "phone", "avatarUrl", "tier", "kycStatus", "isGuest", "authProviders"} {
 		if v, ok := user[k]; ok {
 			out[k] = v
 		}
@@ -823,6 +837,51 @@ func extractUserID(user bson.M) (string, error) {
 	default:
 		return "", errors.New("user id missing")
 	}
+}
+
+func deriveUsername(fullName, email, provider string) string {
+	if slug := slugifyUsername(fullName); slug != "" {
+		return slug
+	}
+	if email != "" {
+		if idx := strings.Index(email, "@"); idx > 0 {
+			if slug := slugifyUsername(email[:idx]); slug != "" {
+				return slug
+			}
+		}
+	}
+	base := provider
+	if base == "" {
+		base = "user"
+	}
+	slugBase := slugifyUsername(base)
+	if slugBase == "" {
+		slugBase = "user"
+	}
+	suffix, err := generateSecureToken(4)
+	if err != nil || len(suffix) < 6 {
+		suffix = "gh" + time.Now().Format("150405")
+	}
+	if len(suffix) > 6 {
+		suffix = suffix[:6]
+	}
+	return slugBase + "-" + strings.ToLower(suffix)
+}
+
+func slugifyUsername(raw string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if raw == "" {
+		return ""
+	}
+	slug := usernameSanitizer.ReplaceAllString(raw, "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		return ""
+	}
+	if len(slug) > 32 {
+		slug = slug[:32]
+	}
+	return slug
 }
 
 func storePasswordResetToken(ctx context.Context, userID, email, token string) error {
@@ -962,4 +1021,48 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		duration := time.Since(start)
 		log.Printf("%s %s -> %d (%s)", r.Method, r.URL.Path, lrw.status, duration)
 	})
+}
+
+// -----------------------------------------------------------------------------
+// JIT Wallet Generation
+// -----------------------------------------------------------------------------
+func triggerWalletGeneration(userID string) {
+	if cfg == nil || cfg.PaymentGatewayURL == "" || cfg.InternalServiceKey == "" {
+		log.Printf("[auth][generate-all] missing config for JIT wallet internal call")
+		return
+	}
+
+	go func() {
+		// allow brief delay to ensure user doc replication in mongo (if using replica sets)
+		time.Sleep(1 * time.Second)
+
+		payload := map[string]string{"userId": userID}
+		body, _ := json.Marshal(payload)
+
+		url := fmt.Sprintf("%s/internal/crypto/wallets/generate-all", strings.TrimRight(cfg.PaymentGatewayURL, "/"))
+
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+		if err != nil {
+			log.Printf("[auth][generate-all] failed to create request for %s: %v", userID, err)
+			return
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Internal-Key", cfg.InternalServiceKey)
+
+		client := &http.Client{Timeout: 30 * time.Second} // Tatum API calls might take 10-15s for 3 coins
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("[auth][generate-all] network error requesting wallets for %s: %v", userID, err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("[auth][generate-all] payment-gateway returned %d for user %s", resp.StatusCode, userID)
+			return
+		}
+
+		log.Printf("[auth][generate-all] successfully triggered 3 wallets for new user %s", userID)
+	}()
 }

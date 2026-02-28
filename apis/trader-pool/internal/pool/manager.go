@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -181,12 +182,21 @@ func (m *Manager) finalize(order tradeOrder, settlement *tradeSettlement) error 
 		newBalance = bal.AvailableUsd
 	}
 
+	winAmount := 0.0
+	if strings.EqualFold(settlement.Outcome, "WIN") {
+		winAmount = settlement.PayoutUsd - order.StakeUsd
+		if winAmount < 0 {
+			winAmount = 0
+		}
+	}
+
 	payload := map[string]interface{}{
 		"sessionId":       order.SessionID,
 		"userId":          order.UserID,
 		"gameType":        order.GameType,
 		"stakeUsd":        order.StakeUsd,
 		"payoutUsd":       settlement.PayoutUsd,
+		"winAmountUsd":    winAmount,
 		"outcome":         settlement.Outcome,
 		"newBalance":      newBalance,
 		"traceId":         order.TraceID,

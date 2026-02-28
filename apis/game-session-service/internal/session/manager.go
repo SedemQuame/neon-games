@@ -48,15 +48,16 @@ type BetAcknowledgement struct {
 }
 
 type SessionOutcome struct {
-	SessionID  string  `json:"sessionId"`
-	UserID     string  `json:"userId"`
-	GameType   string  `json:"gameType"`
-	Outcome    string  `json:"outcome"`
-	PayoutUsd  float64 `json:"payoutUsd"`
-	StakeUsd   float64 `json:"stakeUsd"`
-	NewBalance float64 `json:"newBalance"`
-	TraceID    string  `json:"traceId"`
-	ContractID string  `json:"derivContractId,omitempty"`
+	SessionID    string  `json:"sessionId"`
+	UserID       string  `json:"userId"`
+	GameType     string  `json:"gameType"`
+	Outcome      string  `json:"outcome"`
+	PayoutUsd    float64 `json:"payoutUsd"`
+	WinAmountUsd float64 `json:"winAmountUsd"`
+	StakeUsd     float64 `json:"stakeUsd"`
+	NewBalance   float64 `json:"newBalance"`
+	TraceID      string  `json:"traceId"`
+	ContractID   string  `json:"derivContractId,omitempty"`
 }
 
 func NewManager(db *mongo.Database, rdb *redis.Client, walletClient *wallet.Client, cfg *config.Config) *Manager {
@@ -191,7 +192,7 @@ func (m *Manager) SubscribeToOutcomes(ctx context.Context) {
 		if err := json.Unmarshal([]byte(msg.Payload), &outcome); err != nil {
 			continue
 		}
-		log.Printf("[trace=%s] outcome session=%s user=%s game=%s result=%s payout=%.2f", outcome.TraceID, outcome.SessionID, outcome.UserID, outcome.GameType, outcome.Outcome, outcome.PayoutUsd)
+		log.Printf("[trace=%s] outcome session=%s user=%s game=%s result=%s payout=%.2f win=%.2f", outcome.TraceID, outcome.SessionID, outcome.UserID, outcome.GameType, outcome.Outcome, outcome.PayoutUsd, outcome.WinAmountUsd)
 		m.persistOutcome(ctx, outcome)
 		m.broadcast(outcome.UserID, wsMessage("GAME_RESULT", outcome))
 	}
@@ -206,6 +207,7 @@ func (m *Manager) persistOutcome(ctx context.Context, outcome SessionOutcome) {
 				"status":          outcome.Outcome,
 				"outcome":         outcome.Outcome,
 				"payoutUsd":       outcome.PayoutUsd,
+				"winAmountUsd":    outcome.WinAmountUsd,
 				"completedAt":     time.Now(),
 				"traceId":         outcome.TraceID,
 				"derivContractId": outcome.ContractID,
@@ -290,15 +292,16 @@ func (m *Manager) refundStaleSessions(ctx context.Context) {
 		}
 
 		outcome := SessionOutcome{
-			SessionID:  sessionID,
-			UserID:     userID,
-			GameType:   gameType,
-			Outcome:    "REFUND",
-			PayoutUsd:  stake,
-			StakeUsd:   stake,
-			NewBalance: bal.AvailableUsd,
-			TraceID:    traceID,
-			ContractID: "REFUND",
+			SessionID:    sessionID,
+			UserID:       userID,
+			GameType:     gameType,
+			Outcome:      "REFUND",
+			PayoutUsd:    stake,
+			WinAmountUsd: 0,
+			StakeUsd:     stake,
+			NewBalance:   bal.AvailableUsd,
+			TraceID:      traceID,
+			ContractID:   "REFUND",
 		}
 		m.persistOutcome(context.Background(), outcome)
 		m.broadcast(userID, wsMessage("GAME_RESULT", outcome))

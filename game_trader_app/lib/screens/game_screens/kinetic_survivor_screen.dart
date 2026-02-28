@@ -410,6 +410,7 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
         stakeUsd: stakeAmount,
         prediction: _buildPrediction(mode),
       );
+      if (!mounted) return;
       setState(() {
         _status = 'Listening for a response...';
         _isSimulating = true;
@@ -419,7 +420,6 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
         context,
         '$mode mission armed with \$${stakeAmount.toStringAsFixed(2)} stake.',
       );
-      if (!mounted) return;
       debugPrint('Session ${ack.sessionId} trace=${ack.traceId}');
     } on GameSocketException catch (err) {
       if (!mounted) return;
@@ -482,13 +482,13 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
       _ballOffset = _randomOffset(win);
       _highlightWin = win;
       _status = win
-          ? 'Mission survived · +\$${event.payoutUsd.toStringAsFixed(2)}'
+          ? 'Mission survived · +\$${event.winAmountUsd.toStringAsFixed(2)}'
           : 'Mission ${event.outcome.toLowerCase()}';
     });
     showGameMessage(
       context,
       win
-          ? 'You won \$${event.payoutUsd.toStringAsFixed(2)}'
+          ? 'You won \$${event.winAmountUsd.toStringAsFixed(2)}'
           : 'Mission ${event.outcome}',
     );
   }

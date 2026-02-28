@@ -102,9 +102,11 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
       });
       _startShuffleLoop();
     } on GameSocketException catch (err) {
+      if (!mounted) return;
       _resetToIdle(err.message);
       showGameMessage(context, err.message);
     } catch (err) {
+      if (!mounted) return;
       _resetToIdle('Bet failed');
       showGameMessage(context, 'Bet failed: $err');
     }
@@ -175,7 +177,7 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
       userWon = win;
       gamePhase = GamePhase.result;
       _statusMessage = win
-          ? 'Core stabilized +\$${event.payoutUsd.toStringAsFixed(2)}'
+          ? 'Core stabilized +\$${event.winAmountUsd.toStringAsFixed(2)}'
           : 'Core destabilized ${event.outcome}';
     });
     _overlayController.forward(from: 0);
@@ -656,7 +658,7 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
     showGameMessage(
       context,
       win
-          ? 'Dimension flip paid \$${event.payoutUsd.toStringAsFixed(2)}'
+          ? 'Dimension flip paid \$${event.winAmountUsd.toStringAsFixed(2)}'
           : 'Dimension flip closed as ${event.outcome}',
     );
   }

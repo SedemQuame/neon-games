@@ -42,6 +42,8 @@ type Config struct {
 	PasswordResetTTLMinutes string
 	PasswordResetTTL        time.Duration
 
+	PaymentGatewayURL string // e.g. http://payment-gateway:8003
+
 	AppEnv   string
 	LogLevel string
 }
@@ -75,6 +77,8 @@ func Load() *Config {
 		EmailFrom:               getEnv("EMAIL_FROM", "Glory Grid Support <support@glorygrid.local>"),
 		PasswordResetURL:        getEnv("PASSWORD_RESET_URL", "https://glorygrid.local/reset-password"),
 		PasswordResetTTLMinutes: getEnv("PASSWORD_RESET_TTL_MINUTES", "30"),
+
+		PaymentGatewayURL: getEnv("PAYMENT_GATEWAY_URL", "http://payment-gateway:8003"),
 
 		AppEnv:   getEnv("APP_ENV", "development"),
 		LogLevel: getEnv("LOG_LEVEL", "info"),

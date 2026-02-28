@@ -65,7 +65,7 @@ The Glory Grid backend is a **distributed microservices platform** that acts as 
 
 In addition to this relay role, the platform manages:
 - Cryptocurrency deposit & withdrawal flows (BTC, ETH, USDT)
-- Mobile Money (MoMo) via **Paystack** (MTN, Vodafone, AirtelTigo — sandbox + production accounts under one dashboard)
+- Mobile Money (MoMo) via **Flutterwave** (MTN, Vodafone, AirtelTigo — unified sandbox + live credentials)
 - Multiple authentication strategies: Phone+OTP, Email+Password, Google OAuth, Apple Sign-In, Guest
 - Load balancing of multiple Deriv trading accounts
 - Player wallet, ledger, and leaderboard system
@@ -150,12 +150,12 @@ Game Outcome:
   Trader Pool → PUBLISH game:outcome:{sessionId} → Redis → Game Session Service → WS → Player
 
 Payment Deposit:
-  Paystack/Tatum webhook → Payment Gateway → POST /internal/ledger/credit → Wallet Service
+  Flutterwave/Tatum webhook → Payment Gateway → POST /internal/ledger/credit → Wallet Service
   Payment Gateway → PUBLISH payment:user:{userId} → Redis → Payment WS → Flutter App
 
 Withdrawal:
   Wallet Service → POST /internal/reserve-withdrawal → (reserve balance)
-  Payment Gateway → Paystack Transfer → Paystack callback → POST /internal/release-withdrawal
+  Payment Gateway → Flutterwave Transfer → Flutterwave callback → POST /internal/release-withdrawal
 ```
 
 ---
@@ -264,13 +264,13 @@ sequenceDiagram
       game:outcome:{sessionId}  ─ JWT RS256 private key   │
       payment:user:{userId}     ─ HD Wallet master seed   │
                                 ─ Deriv account tokens    │
-                                ─ Paystack API credentials│
+                                ─ Flutterwave API credentials│
 
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                         EXTERNAL SYSTEMS                                  │
 ├──────────────────────────────────────────────────────────────────────────┤
 │ Deriv WebSocket API (wss://ws.binaryws.com/websockets/v3)                │
-│ Paystack API (Charge + Transfer) — MoMo: MTN, Vodafone, AirtelTigo (GH)  │
+│ Flutterwave API (Charge + Transfer) — MoMo: MTN, Vodafone, AirtelTigo (GH)  │
 │ SMS Aggregator API (Termii/Twilio) — OTP delivery                        │
 │ Tatum               — Blockchain webhook monitoring (BTC/ETH/USDT)       │
 │ Google Identity API — Google OAuth token verification                    │
@@ -313,7 +313,7 @@ sequenceDiagram
     GS->>UI: PAYMENT_UPDATE WS frame (traceId)
 ```
 
-**Logging contract:** Every hop emits a structured log line with `traceId`, `userId`, `sessionId`, and the service-specific fields (stake, payout, Paystack reference, etc.). Logs land in the container stdout (Docker) and can be tailed via `./setup.sh logs <service>`; when shipping to cloud, forward them to Loki/OpenSearch using the same JSON schema for correlation.
+**Logging contract:** Every hop emits a structured log line with `traceId`, `userId`, `sessionId`, and the service-specific fields (stake, payout, Flutterwave reference, etc.). Logs land in the container stdout (Docker) and can be tailed via `./setup.sh logs <service>`; when shipping to cloud, forward them to Loki/OpenSearch using the same JSON schema for correlation.
 
 ---
 
@@ -328,13 +328,14 @@ sequenceDiagram
 |---|---|---|
 | **Phone + OTP** | 6-digit code sent via SMS aggregator (Termii/Twilio) and stored with TTL | Primary auth, Ghana-first |
 | **Email + Password** | Argon2id hashed, stored in MongoDB | Desktop/web users |
-| **Google OAuth** | Flutter app receives Google ID token; backend verifies with Google | Social login |
-| **Apple Sign-In** | Flutter app receives Apple identity token; backend verifies with Apple | iOS/macOS users |
+| **Google OAuth** | Via Passport.js gateway using `passport-google-oauth20`, exchanged for JWT | Social login |
+| **Facebook OAuth** | Via Passport.js gateway using `passport-facebook`, exchanged for JWT | Social login |
+| **Apple Sign-In** | Via Passport.js gateway (Sign in with Apple) or native token verify | iOS/macOS users |
 | **Guest Session** | Issues a restricted JWT with no deposit/withdrawal access | Onboarding, try-before-register |
 
 **Key Design:**
 - Issues short-lived **access tokens** (RS256 JWT, 15 min) and long-lived **opaque refresh tokens** (7 days, stored in Redis).
-- Google and Apple tokens are verified against the provider's public keys — never trusted blindly.
+- Native mobile apps can still bring their own provider tokens (verified against Google/Apple JWKS). Web flows go through a dedicated Passport.js gateway container which handles OAuth redirects, normalises provider profiles, and swaps them for Auth Service JWTs via `/api/v1/auth/social/exchange`.
 - OTP documents auto-expire via MongoDB TTL index on `expiresAt` field.
 - Guest accounts can be **upgraded** to full accounts in-place — game history is preserved.
 - Argon2id password hashing with randomised salt per user.
@@ -357,15 +358,15 @@ sequenceDiagram
 ---
 
 ### 5.3 Payment Gateway
-**Responsibilities:** Paystack MoMo deposits/withdrawals, Tatum crypto deposits, webhook processing.
+**Responsibilities:** Flutterwave MoMo deposits/withdrawals, Tatum crypto deposits, webhook processing.
 
 **Key Design:**
-- **Deposit initiation:** Calls Paystack's `POST /charge` with the `mobile_money` channel (MTN/Vodafone/AirtelTigo) and the player's phone number. Paystack immediately returns a `reference` and pushes an STK/OTP prompt to the phone.
-- **Deposit confirmation:** Paystack fires a webhook to `/webhooks/payment/paystack`; the gateway validates the `X-Paystack-Signature` header, persists the event, then calls `POST /internal/ledger/credit` on Wallet Service. If a webhook is missed, we re-query `GET /transaction/verify/{reference}` before marking the payment stale.
-- **Background poller:** Every 30 seconds, scans `PENDING` payments older than 2 minutes and calls Paystack's verification endpoint so that settlement is never blocked on webhook delivery.
-- **Withdrawal initiation:** Calls `POST /internal/ledger/reserve-withdrawal` on Wallet Service (locks funds) before creating/using a Paystack transfer recipient and firing `POST /transfer`. Failures immediately trigger `/internal/ledger/release-withdrawal`.
+- **Deposit initiation:** Calls Flutterwave's `POST /charge` with the `mobile_money` channel (MTN/Vodafone/AirtelTigo) and the player's phone number. Flutterwave immediately returns a `reference` and pushes an STK/OTP prompt to the phone.
+- **Deposit confirmation:** Flutterwave fires a webhook to `/webhooks/payment/flutterwave`; the gateway validates the `verif-hash` header (shared secret), persists the event, then calls `POST /internal/ledger/credit` on Wallet Service. If a webhook is missed, we re-query `GET /transaction/verify/{reference}` before marking the payment stale.
+- **Background poller:** Every 30 seconds, scans `PENDING` payments older than 2 minutes and calls Flutterwave's verification endpoint so that settlement is never blocked on webhook delivery.
+- **Withdrawal initiation:** Calls `POST /internal/ledger/reserve-withdrawal` on Wallet Service (locks funds) before firing Flutterwave's `POST /transfers` with the user's MoMo wallet (`account_bank` = MTN/VODAFONE/TIGO, `account_number` = phone). Failures immediately trigger `/internal/ledger/release-withdrawal`.
 - **Real-time client updates:** Publishes to Redis PubSub `payment:user:{userId}` after every payment state change so Flutter sessions stay in sync.
-- **Logging & tracing:** Every Paystack interaction logs `traceId`, `paystackReference`, channel, and amount for replay.
+- **Logging & tracing:** Every Flutterwave interaction logs `traceId`, `providerReference`, channel, and amount for replay.
 - Crypto deposit addresses derived via HD Wallet (BIP32/BIP44) — one unique address per user per coin.
 
 ---
@@ -529,9 +530,9 @@ Unique addresses per user (BIP44: `m/44'/coin'/0'/user_index`) means no address 
 
 ---
 
-### 8.2 Mobile Money (MoMo) — Paystack
+### 8.2 Mobile Money (MoMo) — Flutterwave
 
-**Provider:** [Paystack](https://paystack.com/) — unified cards + mobile money gateway with instant sandbox accounts.
+**Provider:** [Flutterwave](https://flutterwave.com/) — unified cards + mobile money gateway with instant sandbox accounts.
 **Supported Networks:** MTN Mobile Money (`mtn-gh`), Vodafone Cash (`vodafone-gh`), AirtelTigo Money (`airteltigo-gh`). Additional Nigerian channels can be enabled per sub-account.
 
 #### Deposit Flow
@@ -540,28 +541,29 @@ Unique addresses per user (BIP44: `m/44'/coin'/0'/user_index`) means no address 
    POST /api/v1/payments/momo/deposit
    {phone: "024XXXXXXX", amount: 50, channel: "mtn-gh"}
         │
-2. Payment Gateway generates Paystack reference (DEP-{userId}-{timestamp})
+2. Payment Gateway generates Flutterwave reference (DEP-{userId}-{timestamp})
    Writes PENDING record to MongoDB payment_events collection
         │
-3. Payment Gateway calls Paystack POST /charge
+3. Payment Gateway calls Flutterwave `POST /v3/charges?type=mobile_money_ghana`
    {
+     "tx_ref": "DEP-...",
      "email": "<user>@gamehub",
-     "amount": 5000,              # in kobo/pesewas
+     "amount": 50,
      "currency": "GHS",
-     "mobile_money": {"phone": "...", "provider": "mtn"},
-     "reference": "DEP-..."
+     "phone_number": "024XXXXXXX",
+     "network": "MTN"
    }
         │
-4. Paystack returns immediate response (status=pending, reference)
+4. Flutterwave returns immediate response (status=pending, reference)
    → Player receives USSD/app prompt to enter MoMo PIN
         │
-5. Paystack fires webhook:
-   POST /webhooks/payment/paystack
-   Headers: X-Paystack-Signature (HMAC SHA512)
+5. Flutterwave fires webhook:
+   POST /webhooks/payment/flutterwave
+  Headers: `verif-hash` (raw shared secret configured in Flutterwave dashboard)
         │
 6. Payment Gateway:
    a. Verifies signature
-   b. Checks Redis idempotency key (SETNX idempotency:paystack:{reference})
+   b. Checks Redis idempotency key (SETNX idempotency:flutterwave:deposit:{reference})
    c. Updates payment_events status → CONFIRMED/FAILED
    d. Calls POST /internal/ledger/credit on Wallet Service for SUCCESS
    e. Publishes to Redis PubSub payment:user:{userId}
@@ -579,18 +581,21 @@ Unique addresses per user (BIP44: `m/44'/coin'/0'/user_index`) means no address 
 2. Payment Gateway calls POST /internal/ledger/reserve-withdrawal
    → Wallet Service creates WITHDRAWAL_RESERVED entry immediately
         │
-3. Payment Gateway ensures Paystack transfer recipient exists
-   POST /transferrecipient (type=mobile_money, details={phone, network})
+3. Payment Gateway calls Flutterwave `POST /v3/transfers`
+   {
+     "account_bank": "MTN",
+     "account_number": "024XXXXXXX",
+     "amount": 50,
+     "currency": "GHS",
+     "reference": "WD-..."
+   }
         │
-4. Payment Gateway calls Paystack POST /transfer
-   {amount: 5000, currency: "GHS", recipient: "<code>", reference: "WD-..."}
-        │
-   [If Paystack API fails]:
+   [If Flutterwave API fails]:
    → Payment Gateway calls /internal/ledger/release-withdrawal (refund=true)
    → Returns 502 error to user; balance restored
         │
-5. Paystack completes transfer and fires webhook
-   POST /webhooks/payment/paystack/withdrawal
+5. Flutterwave completes transfer and fires webhook
+   POST /webhooks/payment/flutterwave/withdrawal
         │
 6a. SUCCESS:
    → Payment Gateway calls /internal/ledger/release-withdrawal (refund=false)
@@ -604,7 +609,7 @@ Unique addresses per user (BIP44: `m/44'/coin'/0'/user_index`) means no address 
 ```
 
 #### Missed Webhook Recovery
-Paystack webhooks can be retried up to 10 times, but we still run a **background poller** every 30 seconds. The poller queries `GET /transaction/verify/{reference}` (deposits) and `GET /transfer/{reference}` (withdrawals) for anything that has been `PENDING` for >2 minutes and finalises it to keep ledgers in sync even if webhooks never arrive.
+Flutterwave webhooks can be retried up to 10 times, but we still run a **background poller** every 30 seconds. The poller queries `GET /transactions/verify_by_reference?tx_ref={reference}` (deposits) and `GET /transfers?reference={reference}` (withdrawals) for anything that has been `PENDING` for >2 minutes and finalises it to keep ledgers in sync even if webhooks never arrive.
 
 ---
 
@@ -676,6 +681,7 @@ Paystack webhooks can be retried up to 10 times, but we still run a **background
   },
   "outcome": "WIN",
   "payoutUsd": 80.00,
+  "winAmountUsd": 30.00,
   "derivContractId": "12345678",
   "startedAt": "ISODate()",
   "resolvedAt": "ISODate()"
@@ -728,8 +734,8 @@ Paystack webhooks can be retried up to 10 times, but we still run a **background
 | `account:{derivId}:state` | Hash | None | Deriv account health, balance & active trades |
 | `pending_contract:{sessionId}` | String | 120s | In-flight Deriv contract (timeout sweeper) |
 | `leaderboard:global:weekly` | ZSet | None | Sorted player scores for global leaderboard |
-| `idempotency:paystack:{ref}` | String | 24h | Paystack deposit deduplication |
-| `idempotency:paystack:withdrawal:{ref}` | String | 24h | Paystack withdrawal deduplication |
+| `idempotency:flutterwave:deposit:{ref}` | String | 24h | Flutterwave deposit deduplication |
+| `idempotency:flutterwave:withdrawal:{ref}` | String | 24h | Flutterwave withdrawal deduplication |
 | `payment:user:{userId}` | PubSub | — | Real-time push channel for payment updates |
 | `game:outcome:{sessionId}` | PubSub | — | Trader Pool → Game Session outcome delivery |
 
@@ -829,15 +835,15 @@ Internet
 The master seed is split into 3 key shares held by 3 different people (e.g., CTO, Lead Engineer, CFO). Any 2 of the 3 must be present to reconstruct the seed — preventing a single insider from stealing the master key.
 
 #### Webhook Security
-All incoming webhooks (Paystack, Tatum) must:
-1. Include a signature header: Paystack uses `X-Paystack-Signature` (HMAC-SHA512 of the raw payload), Tatum uses `X-Tatum-Signature` (HMAC-SHA256).
+All incoming webhooks (Flutterwave, Tatum) must:
+1. Include a signature header: Flutterwave sends a `verif-hash` header (exactly matching the secret hash configured in their dashboard); Tatum uses `X-Tatum-Signature` (HMAC-SHA256).
 2. Be verified **before** any business logic executes.
 3. Pass idempotency check (Redis SETNX) to prevent replay attacks.
 4. Originate from a whitelisted IP range (provider's published static IP list).
 
-**Paystack HMAC Verification:**
+**Flutterwave HMAC Verification:**
 ```go
-func VerifyPaystackHMAC(secret string, payload []byte, header string) bool {
+func VerifyFlutterwaveHMAC(secret string, payload []byte, header string) bool {
     mac := hmac.New(sha512.New, []byte(secret))
     mac.Write(payload)
     expected := hex.EncodeToString(mac.Sum(nil))
@@ -951,7 +957,7 @@ This means even direct database access (e.g., a compromised MongoDB node) does n
 | Double-spend (game) | Medium | High | Redis SETNX distributed lock per user session |
 | Crypto address poisoning | Low | Critical | Address confirmation email for new withdrawal addresses |
 | Brute force (login) | High | High | Argon2id hashing, exponential backoff, account lockout after 10 failures |
-| MoMo webhook spoofing | Medium | Critical | IP whitelist + Paystack HMAC-SHA512 + Tatum HMAC-SHA256 verification |
+| MoMo webhook spoofing | Medium | Critical | IP whitelist + Flutterwave HMAC-SHA512 + Tatum HMAC-SHA256 verification |
 | Deriv account credential leak | Low | Critical | Stored in Vault, accessed only by Trader Pool service |
 
 ---
@@ -962,8 +968,8 @@ This means even direct database access (e.g., a compromised MongoDB node) does n
 - Game resolution latency histogram (p50, p95, p99)
 - Deriv API error rate per account
 - Redis PubSub message delivery latency
-- Payment webhook failure rate (Paystack + Tatum)
-- Paystack charge success rate per channel (mtn-gh, vodafone-gh, airteltigo-gh)
+- Payment webhook failure rate (Flutterwave + Tatum)
+- Flutterwave charge success rate per channel (mtn-gh, vodafone-gh, airteltigo-gh)
 - Active WebSocket connection count (live game + payment)
 - MongoDB slow query count (> 100ms)
 - Background poller recovery count (missed webhooks caught)
@@ -974,12 +980,12 @@ This means even direct database access (e.g., a compromised MongoDB node) does n
 
 **Security Alerting:**
 - 🔴 **P0:** > 5 failed login attempts for same user in 60s → Lock account + PagerDuty
-- 🔴 **P0:** Paystack/Tatum webhook HMAC validation failure spike → PagerDuty
+- 🔴 **P0:** Flutterwave/Tatum webhook HMAC validation failure spike → PagerDuty
 - 🔴 **P0:** Wallet balance calculation mismatch → PagerDuty
 - 🔴 **P0:** All Deriv accounts marked unhealthy → PagerDuty
 - 🔴 **P0:** Redis PubSub delivery failure (game outcome not delivered) → PagerDuty
 - 🟡 **P1:** Vault access denied for a service → Slack alert
-- 🟡 **P1:** Paystack payment webhook failure rate > 5% → Slack alert
+- 🟡 **P1:** Flutterwave payment webhook failure rate > 5% → Slack alert
 - 🟡 **P1:** Background poller recovering > 10 payments/hour (webhook reliability issue) → Slack alert
 - 🟡 **P1:** OTP delivery failure rate > 2% → Slack alert (SMS provider issue)
 
@@ -1195,7 +1201,7 @@ For crypto deposits:
 
 For MoMo:
 1. Webhook provides { reference, status }.
-2. Backend calls Paystack/Flutterwave's verification endpoint
+2. Backend calls Flutterwave/Flutterwave's verification endpoint
    to independently confirm amount and status.
 3. Never trust the status or amount directly from the inbound webhook body.
 ```
@@ -1365,7 +1371,9 @@ If valid → sends { type: "CONNECTED", userId: "...", sessionId: "..." }
   "type": "GAME_RESULT",
   "sessionId": "uuid",
   "outcome": "WIN" | "LOSS",
+  "stakeUsd": 50.00,
   "payoutUsd": 95.00,
+  "winAmountUsd": 45.00,
   "newBalance": 1545.00
 }
 
@@ -1447,7 +1455,7 @@ message AccountHealthUpdate {
 | Topic | Producer | Consumer | Key | Payload |
 |---|---|---|---|---|
 | `trade_orders` | Game Session Svc | Deriv Trader Pool | `sessionId` | `{sessionId, userId, gameType, stakeUsd, prediction}` |
-| `game_outcomes` | Deriv Trader Pool | Game Session Svc, Wallet Svc | `sessionId` | `{sessionId, userId, outcome, payoutUsd, derivContractId}` |
+| `game_outcomes` | Deriv Trader Pool | Game Session Svc, Wallet Svc | `sessionId` | `{sessionId, userId, outcome, stakeUsd, payoutUsd, winAmountUsd, derivContractId}` |
 | `deposit_confirmed` | Payment Gateway | Wallet Svc | `userId` | `{userId, coin, amountUsd, txHash, source}` |
 | `withdrawal_requested` | Wallet Svc | Payment Gateway | `userId` | `{withdrawalId, userId, amountUsd, method, destination}` |
 | `withdrawal_processed` | Payment Gateway | Wallet Svc | `userId` | `{withdrawalId, status, processedAt}` |
@@ -1464,8 +1472,8 @@ All webhook endpoints are on a separate internal subdomain (`webhooks.internal.g
 | Method | Path | Provider | Auth |
 |---|---|---|---|
 | `POST` | `/webhooks/crypto/deposit` | Tatum / Moralis | HMAC-SHA256 `X-Tatum-Signature` |
-| `POST` | `/webhooks/momo/callback` | Paystack / Flutterwave | HMAC-SHA256 `X-Paystack-Signature` |
-| `POST` | `/webhooks/momo/withdrawal` | Paystack / Flutterwave | HMAC-SHA256 `X-Paystack-Signature` |
+| `POST` | `/webhooks/momo/callback` | Flutterwave / Flutterwave | `verif-hash` shared secret |
+| `POST` | `/webhooks/momo/withdrawal` | Flutterwave / Flutterwave | `verif-hash` shared secret |
 
 ---
 

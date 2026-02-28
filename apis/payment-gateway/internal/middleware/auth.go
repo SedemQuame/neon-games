@@ -3,7 +3,6 @@ package middleware
 import (
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/sha512"
 	"crypto/subtle"
 	"encoding/hex"
 	"strings"
@@ -50,14 +49,15 @@ func VerifyTatumHMAC(cfg *config.Config) fiber.Handler {
 	}
 }
 
-func VerifyPaystackHMAC(cfg *config.Config) fiber.Handler {
+func VerifyFlutterwaveHMAC(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if cfg.PaystackWebhookSecret == "" {
+		secret := strings.TrimSpace(cfg.FlutterwaveWebhookSecret)
+		if secret == "" {
 			return c.Next()
 		}
-		signature := c.Get("X-Paystack-Signature")
-		if !verifyHMACSHA512(signature, c.Body(), cfg.PaystackWebhookSecret) {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid paystack signature"})
+		signature := strings.TrimSpace(c.Get("verif-hash"))
+		if signature == "" || signature != secret {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid flutterwave signature"})
 		}
 		return c.Next()
 	}
@@ -92,16 +92,6 @@ func verifyHMACSHA256(provided string, payload []byte, secret string) bool {
 		return false
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(payload)
-	expected := hex.EncodeToString(mac.Sum(nil))
-	return subtle.ConstantTimeCompare([]byte(strings.ToLower(provided)), []byte(expected)) == 1
-}
-
-func verifyHMACSHA512(provided string, payload []byte, secret string) bool {
-	if provided == "" || secret == "" {
-		return false
-	}
-	mac := hmac.New(sha512.New, []byte(secret))
 	mac.Write(payload)
 	expected := hex.EncodeToString(mac.Sum(nil))
 	return subtle.ConstantTimeCompare([]byte(strings.ToLower(provided)), []byte(expected)) == 1
