@@ -125,6 +125,8 @@ func main() {
 	v1.Post("/momo/withdraw", h.InitiateMoMoWithdrawal)
 
 	// --- Crypto ---
+	// Initiate a withdrawal to a user's crypto wallet (MANUAL processing)
+	v1.Post("/crypto/withdraw", h.InitiateCryptoWithdrawal)
 	// Generate a deposit address for a given coin (BTC, ETH, USDT)
 	v1.Post("/crypto/address", h.GenerateCryptoAddress)
 	// Check status of a crypto deposit by tx hash

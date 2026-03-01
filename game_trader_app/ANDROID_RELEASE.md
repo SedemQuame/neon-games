@@ -1,7 +1,7 @@
 # Glory Grid — Android Production Prep
 
 ## App Identity
-- **Application ID:** `com.legendarypixels.game_trader_app` (update in `android/app/build.gradle.kts` if you have a reserved Play Console id)
+- **Application ID:** `com.legendarypixelsid.glorygrid` (update in `android/app/build.gradle.kts` if you have a reserved Play Console id)
 - **Display Name:** Glory Grid
 - **Icon:** `assets/icons/app_icon.png` (regenerate platform assets via `flutter pub run flutter_launcher_icons` after changes)
 - **Short Description (80 chars max):** "Skill-based arcade trading with live wallet sync and instant wins."

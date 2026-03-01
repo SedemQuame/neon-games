@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
@@ -17,7 +20,22 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
   String selectedNetwork = 'MTN Mobile Money';
   final _phoneController = TextEditingController();
   final _amountController = TextEditingController();
+  final _picker = ImagePicker();
+  File? _proofImage;
   bool _loading = false;
+
+  bool get _isFormValid {
+    return _phoneController.text.isNotEmpty &&
+        _amountController.text.isNotEmpty &&
+        _proofImage != null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _phoneController.addListener(() => setState(() {}));
+    _amountController.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -59,6 +77,46 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
                     ),
                     const SizedBox(height: 32),
 
+                    // Manual Instructions
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
+                        border: Border.all(
+                          color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Please send your deposit to:',
+                            style: TextStyle(color: Colors.white, fontSize: 14),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            // TODO: Replace with actual phone number from a merchant account.
+                            '0546744163 - Sedem Amekpewu',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'After sending, fill the form below to confirm your deposit.',
+                            style: TextStyle(
+                              color: Color(0xFF94a3b8),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
                     // Network Selection
                     const Padding(
                       padding: EdgeInsets.only(left: 4, bottom: 8),
@@ -76,9 +134,9 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
 
                     // Phone Number Input
                     _buildTextField(
-                      label: 'Phone Number',
+                      label: 'Sending Number',
                       icon: Icons.phone_android,
-                      placeholder: 'Enter your MoMo number',
+                      placeholder: 'Number used to send money',
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
                     ),
@@ -114,6 +172,65 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
+
+                    // Proof of Payment Upload
+                    const Padding(
+                      padding: EdgeInsets.only(left: 4, bottom: 8),
+                      child: Text(
+                        'Proof of Payment',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFcbd5e1),
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        height: 120,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceDark,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: _proofImage != null
+                                ? AppTheme.primaryColor
+                                : AppTheme.borderDark,
+                          ),
+                        ),
+                        child: _proofImage != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Image.file(
+                                  _proofImage!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                ),
+                              )
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.cloud_upload_outlined,
+                                    size: 32,
+                                    color: AppTheme.primaryColor.withValues(
+                                      alpha: 0.7,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Upload Screenshot',
+                                    style: TextStyle(
+                                      color: Color(0xFF94a3b8),
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
                     const SizedBox(height: 48),
 
                     // Proceed Button
@@ -129,7 +246,7 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
                         ],
                       ),
                       child: ElevatedButton(
-                        onPressed: _loading
+                        onPressed: (_loading || !_isFormValid)
                             ? null
                             : () => _submitPayment(context),
                         child: _loading
@@ -138,14 +255,14 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Proceed to Pay',
+                                    'I have paid',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   SizedBox(width: 8),
-                                  Icon(Icons.arrow_forward, size: 20),
+                                  Icon(Icons.check_circle_outline, size: 20),
                                 ],
                               ),
                       ),
@@ -305,6 +422,15 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
     );
   }
 
+  Future<void> _pickImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _proofImage = File(pickedFile.path);
+      });
+    }
+  }
+
   Future<void> _submitPayment(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     final session = context.read<SessionManager>();
@@ -316,9 +442,11 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
       return;
     }
     final amount = double.tryParse(_amountController.text) ?? 0;
-    if (amount <= 0 || _phoneController.text.isEmpty) {
+    if (amount <= 0 || _phoneController.text.isEmpty || _proofImage == null) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('Enter valid phone and amount')),
+        const SnackBar(
+          content: Text('Enter valid phone, amount and proof image'),
+        ),
       );
       return;
     }
@@ -329,10 +457,18 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
         phone: _phoneController.text.trim(),
         amount: amount,
         channel: _mapNetworkToChannel(selectedNetwork),
+        proofImagePath: _proofImage?.path,
       );
       messenger.showSnackBar(
-        SnackBar(content: Text('Prompt sent! Ref ${response.reference}')),
+        SnackBar(
+          content: Text(
+            'Deposit pending manual verification. Ref: ${response.reference}',
+          ),
+        ),
       );
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
     } on ApiException catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {

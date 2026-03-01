@@ -13,36 +13,121 @@ class WithdrawalScreen extends StatefulWidget {
 }
 
 class _WithdrawalScreenState extends State<WithdrawalScreen> {
-  String _selectedMethod = 'Crypto Wallet';
+  String _selectedMethod = 'Mobile Money';
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  bool _loading = false;
+
+  // Mobile Money Specifics
+  String _selectedNetwork = 'MTN Mobile Money';
+  final List<String> _networks = [
+    'MTN Mobile Money',
+    'Vodafone Cash',
+    'AirtelTigo Money',
+  ];
+
+  // Crypto Specifics
+  String _selectedCrypto = 'USDT';
+  final List<String> _cryptos = ['BTC', 'ETH', 'USDT'];
 
   final List<Map<String, dynamic>> _methods = [
+    {
+      'name': 'Mobile Money',
+      'icon': Icons.phone_android,
+      'color': Colors.green,
+      'hint': 'Enter Mobile Number',
+    },
     {
       'name': 'Crypto Wallet',
       'icon': Icons.currency_bitcoin,
       'color': Colors.orange,
       'hint': 'Enter Wallet Address (BTC, ETH, USDT)',
     },
-    {
-      'name': 'Bank Transfer',
-      'icon': Icons.account_balance,
-      'color': Colors.blueAccent,
-      'hint': 'Enter IBAN or Account Number',
-    },
-    {
-      'name': 'Credit/Debit Card',
-      'icon': Icons.credit_card,
-      'color': Colors.purple,
-      'hint': 'Enter Card Number',
-    },
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController.addListener(() => setState(() {}));
+    _addressController.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
     _amountController.dispose();
     _addressController.dispose();
     super.dispose();
+  }
+
+  String _mapNetworkToChannel(String network) {
+    if (network.contains('MTN')) return 'mtn-gh';
+    if (network.contains('Vodafone')) return 'vodafone-gh';
+    return 'airteltigo-gh';
+  }
+
+  double get _enteredAmount => double.tryParse(_amountController.text) ?? 0;
+  double get _rakeFee => _enteredAmount * 0.05;
+  double get _finalPayout => _enteredAmount - _rakeFee;
+
+  bool get _isValid {
+    if (_enteredAmount <= 0) return false;
+    if (_addressController.text.isEmpty) return false;
+    return true;
+  }
+
+  Future<void> _submitWithdrawal(BuildContext context) async {
+    final session = context.read<SessionManager>();
+    final token = session.session?.accessToken;
+    if (token == null) return;
+
+    final paymentService = session.paymentService;
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _loading = true);
+
+    try {
+      if (_selectedMethod == 'Mobile Money') {
+        final response = await paymentService.initiateMoMoWithdrawal(
+          token: token,
+          phone: _addressController.text.trim(),
+          amount: _enteredAmount,
+          channel: _mapNetworkToChannel(_selectedNetwork),
+        );
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? 'Withdrawal Processing'),
+          ),
+        );
+        try {
+          await session.refreshBalance();
+        } catch (_) {}
+        if (context.mounted) {
+          Navigator.pop(context); // close screen on success
+        }
+      } else if (_selectedMethod == 'Crypto Wallet') {
+        final response = await paymentService.initiateCryptoWithdrawal(
+          token: token,
+          coin: _selectedCrypto,
+          address: _addressController.text.trim(),
+          amount: _enteredAmount,
+        );
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(response['message'] ?? 'Withdrawal Processing'),
+          ),
+        );
+        try {
+          await session.refreshBalance();
+        } catch (_) {}
+        if (context.mounted) {
+          Navigator.pop(context); // close screen on success
+        }
+      }
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -120,15 +205,13 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                               TextButton(
                                 onPressed: () {
                                   setState(() {
-                                    _amountController.text =
-                                        available.toStringAsFixed(2);
+                                    _amountController.text = available
+                                        .toStringAsFixed(2);
                                   });
                                 },
                                 style: TextButton.styleFrom(
-                                  backgroundColor:
-                                      AppTheme.primaryColor.withValues(
-                                    alpha: 0.1,
-                                  ),
+                                  backgroundColor: AppTheme.primaryColor
+                                      .withValues(alpha: 0.1),
                                   foregroundColor: AppTheme.primaryColor,
                                 ),
                                 child: const Text(
@@ -255,7 +338,164 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                         ),
                       ),
                     ),
+
+                    if (_enteredAmount > 0) ...[
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Withdrawal Fee (5%)',
+                              style: TextStyle(
+                                color: Colors.redAccent,
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              '- \$${_rakeFee.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                color: Colors.redAccent,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'You will receive',
+                              style: TextStyle(
+                                color: Colors.greenAccent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '\$${_finalPayout.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                color: Colors.greenAccent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
+
+                    if (_selectedMethod == 'Mobile Money') ...[
+                      // Sub-network dropdown
+                      const Padding(
+                        padding: EdgeInsets.only(left: 4, bottom: 8),
+                        child: Text(
+                          'Mobile Network',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFcbd5e1),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.backgroundDark,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppTheme.borderDark),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedNetwork,
+                            isExpanded: true,
+                            dropdownColor: AppTheme.surfaceDark,
+                            icon: const Icon(
+                              Icons.keyboard_arrow_down,
+                              color: Colors.white,
+                            ),
+                            items: _networks.map((net) {
+                              return DropdownMenuItem<String>(
+                                value: net,
+                                child: Text(
+                                  net,
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                setState(() {
+                                  _selectedNetwork = newValue;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ] else if (_selectedMethod == 'Crypto Wallet') ...[
+                      // Sub-crypto dropdown
+                      const Padding(
+                        padding: EdgeInsets.only(left: 4, bottom: 8),
+                        child: Text(
+                          'Cryptocurrency',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFcbd5e1),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.backgroundDark,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppTheme.borderDark),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedCrypto,
+                            isExpanded: true,
+                            dropdownColor: AppTheme.surfaceDark,
+                            icon: const Icon(
+                              Icons.keyboard_arrow_down,
+                              color: Colors.white,
+                            ),
+                            items: _cryptos.map((coin) {
+                              return DropdownMenuItem<String>(
+                                value: coin,
+                                child: Text(
+                                  coin,
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              if (newValue != null) {
+                                setState(() {
+                                  _selectedCrypto = newValue;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
 
                     // Destination Address / Account Input
                     Padding(
@@ -272,6 +512,9 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                     TextField(
                       controller: _addressController,
                       style: const TextStyle(color: Colors.white, fontSize: 16),
+                      keyboardType: _selectedMethod == 'Mobile Money'
+                          ? TextInputType.phone
+                          : TextInputType.text,
                       decoration: InputDecoration(
                         hintText: methodData['hint'] as String,
                         hintStyle: const TextStyle(color: Color(0xFF475569)),
@@ -307,7 +550,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Withdrawals process within 15 minutes for crypto, and 1-3 business days for bank/cards. Be sure to double-check destination details.',
+                            'Withdrawals process within 15 minutes for crypto, and 1-3 business days for mobile money. Be sure to double-check destination details.',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.white.withValues(alpha: 0.6),
@@ -340,46 +583,27 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
                           ),
                           elevation: 0,
                         ),
-                        onPressed: () {
-                          // Dummy submit action
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              backgroundColor: AppTheme.surfaceDark,
-                              title: const Text(
-                                'Withdrawal Initiated',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              content: const Text(
-                                'Your withdrawal request is being processed array.',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.pop(context); // close dialog
-                                    Navigator.pop(context); // go back to wallet
-                                  },
-                                  child: const Text(
-                                    'Great',
-                                    style: TextStyle(
-                                      color: AppTheme.primaryColor,
-                                    ),
-                                  ),
+                        onPressed: (_loading || !_isValid)
+                            ? null
+                            : () => _submitWithdrawal(context),
+                        child: _loading
+                            ? const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.black,
+                                  strokeWidth: 2,
                                 ),
-                              ],
-                            ),
-                          );
-                        },
-                        child: const Text(
-                          'CONFIRM WITHDRAWAL',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.0,
-                            color: Colors.white,
-                          ),
-                        ),
+                              )
+                            : const Text(
+                                'CONFIRM WITHDRAWAL',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.0,
+                                  color: Colors.black,
+                                ),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -417,7 +641,7 @@ class _WithdrawalScreenState extends State<WithdrawalScreen> {
             ),
           ),
           const Text(
-            'WITHDRAW FILLS',
+            'WITHDRAW FUNDS',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,

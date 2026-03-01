@@ -122,9 +122,10 @@ func (h *Handler) InitiateMoMoDeposit(c *fiber.Ctx) error {
 	userID := c.Locals("userId").(string)
 
 	var body struct {
-		Phone   string  `json:"phone" validate:"required"`
-		Amount  float64 `json:"amount" validate:"required,gt=0"`
-		Channel string  `json:"channel" validate:"required"` // mtn-gh | vodafone-gh | airteltigo-gh
+		Phone    string  `json:"phone" validate:"required"`
+		Amount   float64 `json:"amount" validate:"required,gt=0"`
+		Channel  string  `json:"channel" validate:"required"` // mtn-gh | vodafone-gh | airteltigo-gh
+		ProofURL string  `json:"proofUrl"`
 	}
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
@@ -153,6 +154,7 @@ func (h *Handler) InitiateMoMoDeposit(c *fiber.Ctx) error {
 		"phone":     body.Phone,
 		"amount":    amount,
 		"currency":  h.cfg.MoMoDefaultCurrency,
+		"proofUrl":  body.ProofURL,
 		"status":    "PENDING",
 		"createdAt": time.Now(),
 		"updatedAt": time.Now(),
@@ -163,44 +165,10 @@ func (h *Handler) InitiateMoMoDeposit(c *fiber.Ctx) error {
 	}
 	log.Printf("[payments][deposit][%s] user=%s channel=%s amount=%.2f", clientRef, userID, body.Channel, amount)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
-	network := networkFromChannel(body.Channel)
-	resp, err := h.flutterClient.ChargeMobileMoney(ctx, flutterwave.MobileMoneyChargeRequest{
-		Reference:   clientRef,
-		Amount:      amount,
-		Currency:    h.cfg.MoMoDefaultCurrency,
-		Email:       fmt.Sprintf("%s@gusers.gamehub", userID),
-		FullName:    fmt.Sprintf("Glory Grid %s", shortID(userID)),
-		PhoneNumber: body.Phone,
-		Network:     network,
-		Narration:   "Glory Grid Deposit",
-		CallbackURL: h.cfg.FlutterwaveChargeCallback,
-	}, clientRef)
-	if err != nil {
-		log.Printf("[payments][deposit][%s] flutterwave charge error: %v", clientRef, err)
-		h.db.Collection("payment_events").UpdateOne(context.Background(),
-			bson.M{"_id": clientRef},
-			bson.M{"$set": bson.M{"status": "INITIATION_FAILED", "error": err.Error(), "updatedAt": time.Now()}},
-		)
-		return c.Status(http.StatusBadGateway).JSON(fiber.Map{"error": "could not initiate Flutterwave payment"})
-	}
-
 	respBody := fiber.Map{
-		"reference":         clientRef,
-		"status":            "PENDING",
-		"message":           "Approve the mobile money prompt that just appeared on your phone to finish the deposit.",
-		"providerReference": resp.FlwRef,
-	}
-	if resp.Authorization != nil {
-		if resp.Authorization.Mode != "" {
-			respBody["providerAuthMode"] = resp.Authorization.Mode
-		}
-		if resp.Authorization.Redirect != "" {
-			respBody["providerRedirectUrl"] = resp.Authorization.Redirect
-			respBody["message"] = "We opened Flutterwave to finish verification. Complete that step, then approve the prompt on your phone."
-		}
+		"reference": clientRef,
+		"status":    "PENDING",
+		"message":   "We have recorded your deposit request. We will manually verify it soon.",
 	}
 	return c.Status(http.StatusAccepted).JSON(respBody)
 }
@@ -250,13 +218,18 @@ func (h *Handler) InitiateMoMoWithdrawal(c *fiber.Ctx) error {
 	if !h.isChannelSupported(body.Channel) {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "unsupported channel"})
 	}
-	amount := roundMoney(body.Amount)
+	requestedAmount := roundMoney(body.Amount)
+
+	// Calculate fee
+	feeRate := h.cfg.WithdrawalFeeRate
+	feeAmount := roundMoney(requestedAmount * feeRate)
+	finalAmount := requestedAmount - feeAmount
 
 	withdrawalID := primitive.NewObjectID().Hex()
 	if err := h.walletClient.ReserveWithdrawal(context.Background(), wallet.ReservationRequest{
 		UserID:       userID,
 		WithdrawalID: withdrawalID,
-		AmountUsd:    amount,
+		AmountUsd:    requestedAmount, // Reserve the FULL amount
 	}); err != nil {
 		return c.Status(http.StatusUnprocessableEntity).JSON(fiber.Map{
 			"error": fmt.Sprintf("insufficient balance or reservation failed: %v", err),
@@ -269,24 +242,27 @@ func (h *Handler) InitiateMoMoWithdrawal(c *fiber.Ctx) error {
 		"userId":      userID,
 		"phone":       body.Phone,
 		"channel":     body.Channel,
-		"amount":      amount,
+		"amount":      requestedAmount,
+		"fee":         feeAmount,
+		"finalAmount": finalAmount,
 		"currency":    h.cfg.MoMoDefaultCurrency,
 		"providerRef": clientRef,
-		"paystackRef": clientRef,
-		"status":      "PROCESSING",
+		"paystackRef": clientRef, // legacy compatibility
+		"status":      "PENDING",
 		"createdAt":   time.Now(),
 		"updatedAt":   time.Now(),
 	}
 	h.db.Collection("withdrawals").InsertOne(context.Background(), doc)
-	log.Printf("[payments][withdraw][%s] user=%s channel=%s amount=%.2f", clientRef, userID, body.Channel, amount)
+	log.Printf("[payments][withdraw][%s] user=%s channel=%s requested=%.2f fee=%.2f final=%.2f (MANUAL)", clientRef, userID, body.Channel, requestedAmount, feeAmount, finalAmount)
 
+	/*  // Automating via Flutterwave disabled for manual processing
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	network := networkFromChannel(body.Channel)
 	transfer, err := h.flutterClient.InitiateTransfer(ctx, flutterwave.TransferRequest{
 		Reference:     clientRef,
-		Amount:        amount,
+		Amount:        finalAmount, // send the remaining back
 		Currency:      h.cfg.MoMoDefaultCurrency,
 		DebitCurrency: h.cfg.MoMoDefaultCurrency,
 		AccountBank:   network,
@@ -308,12 +284,93 @@ func (h *Handler) InitiateMoMoWithdrawal(c *fiber.Ctx) error {
 		bson.M{"_id": withdrawalID},
 		bson.M{"$set": bson.M{"transferCode": transfer.FlwRef}},
 	)
+	*/
 
 	return c.Status(http.StatusAccepted).JSON(fiber.Map{
 		"withdrawalId": withdrawalID,
 		"reference":    clientRef,
-		"status":       "PROCESSING",
-		"message":      "Withdrawal is being processed. Funds will arrive within minutes once Flutterwave confirms.",
+		"status":       "PENDING",
+		"message":      "Withdrawal is pending manual verification. Funds will arrive within 1-3 business days.",
+	})
+}
+
+// InitiateCryptoWithdrawal requests a payout to a user's crypto wallet.
+// POST /api/v1/payments/crypto/withdraw
+func (h *Handler) InitiateCryptoWithdrawal(c *fiber.Ctx) error {
+	userID := c.Locals("userId").(string)
+
+	var body struct {
+		Coin    string  `json:"coin" validate:"required"`
+		Network string  `json:"network"`
+		Address string  `json:"address" validate:"required"`
+		Amount  float64 `json:"amount" validate:"required,gt=0"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+	body.Coin = strings.ToUpper(strings.TrimSpace(body.Coin))
+	body.Address = strings.TrimSpace(body.Address)
+	if body.Coin == "" || body.Address == "" || body.Amount <= 0 {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "coin, address, and amount are required"})
+	}
+
+	network := strings.ToUpper(strings.TrimSpace(body.Network))
+	if network == "" {
+		network = defaultNetworks[body.Coin]
+		if network == "" {
+			network = "L1" // Default for unknown coins
+		}
+	}
+	requestedAmount := roundMoney(body.Amount)
+
+	// Calculate fee
+	feeRate := h.cfg.WithdrawalFeeRate
+	feeAmount := roundMoney(requestedAmount * feeRate)
+	finalAmount := requestedAmount - feeAmount
+
+	withdrawalID := primitive.NewObjectID().Hex()
+	if err := h.walletClient.ReserveWithdrawal(context.Background(), wallet.ReservationRequest{
+		UserID:       userID,
+		WithdrawalID: withdrawalID,
+		AmountUsd:    requestedAmount, // Reserve the FULL amount
+	}); err != nil {
+		return c.Status(http.StatusUnprocessableEntity).JSON(fiber.Map{
+			"error": fmt.Sprintf("insufficient balance or reservation failed: %v", err),
+		})
+	}
+
+	clientRef := fmt.Sprintf("WIT-CRYPTO-%s-%d", shortID(userID), time.Now().UnixNano())
+	doc := bson.M{
+		"_id":         withdrawalID,
+		"userId":      userID,
+		"coin":        body.Coin,
+		"network":     network,
+		"address":     body.Address,
+		"amount":      requestedAmount,
+		"fee":         feeAmount,
+		"finalAmount": finalAmount,
+		"currency":    "USD",
+		"providerRef": clientRef,
+		"status":      "PENDING",
+		"createdAt":   time.Now(),
+		"updatedAt":   time.Now(),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := h.db.Collection("withdrawals").InsertOne(ctx, doc); err != nil {
+		h.walletClient.ReleaseWithdrawal(context.Background(), userID, withdrawalID, false)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to record withdrawal"})
+	}
+
+	log.Printf("[payments][withdraw][%s] crypto user=%s coin=%s address=%s requested=%.2f fee=%.2f final=%.2f (MANUAL)", clientRef, userID, body.Coin, body.Address, requestedAmount, feeAmount, finalAmount)
+
+	return c.Status(http.StatusAccepted).JSON(fiber.Map{
+		"withdrawalId": withdrawalID,
+		"reference":    clientRef,
+		"status":       "PENDING",
+		"message":      "Crypto withdrawal is pending manual verification. Funds will arrive shortly after.",
 	})
 }
 
@@ -411,7 +468,7 @@ func (h *Handler) RunMoMoStatusPoller(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			h.pollPendingDeposits(ctx)
+			// h.pollPendingDeposits(ctx) // Disabled since MoMo deposits are now manual
 			h.pollPendingWithdrawals(ctx)
 		}
 	}
@@ -1076,9 +1133,19 @@ func (h *Handler) markMoMoDepositConfirmed(ctx context.Context, ref, providerTxI
 	if event.UserID == "" || event.Amount <= 0 {
 		return nil
 	}
+
+	// Apply deposit fee before crediting.
+	creditAmount := event.Amount
+	if h.cfg.DepositFeeRate > 0 {
+		fee := creditAmount * h.cfg.DepositFeeRate
+		log.Printf("[deposit-fee] momo gross=%.4f fee=%.4f(%.0f%%) net=%.4f user=%s",
+			creditAmount, fee, h.cfg.DepositFeeRate*100, creditAmount-fee, event.UserID)
+		creditAmount -= fee
+	}
+
 	if err := h.walletClient.CreditDeposit(ctx, wallet.CreditRequest{
 		UserID:    event.UserID,
-		AmountUsd: event.Amount,
+		AmountUsd: creditAmount,
 		Source:    "MOMO_DEPOSIT",
 		Reference: ref,
 	}); err != nil {
@@ -1464,6 +1531,15 @@ func (h *Handler) processCryptoTx(ctx context.Context, userID, coin, address str
 
 		// Credit the user's wallet — this branch only executes once per tx
 		amountUsd := amountCrypto // In production, convert via price feed
+
+		// Apply deposit fee (house cut) before crediting.
+		if h.cfg.DepositFeeRate > 0 {
+			fee := amountUsd * h.cfg.DepositFeeRate
+			log.Printf("[deposit-fee] gross=%.6f fee=%.6f(%.0f%%) net=%.6f user=%s",
+				amountUsd, fee, h.cfg.DepositFeeRate*100, amountUsd-fee, userID)
+			amountUsd -= fee
+		}
+
 		if err := h.walletClient.CreditDeposit(ctx, wallet.CreditRequest{
 			UserID:    userID,
 			AmountUsd: amountUsd,
@@ -1480,10 +1556,11 @@ func (h *Handler) processCryptoTx(ctx context.Context, userID, coin, address str
 		h.publishPaymentEvent(userID, fiber.Map{
 			"type":         "CRYPTO_DEPOSIT_CONFIRMED",
 			"amountCrypto": amountCrypto,
+			"amountUsd":    amountUsd,
 			"coin":         coin,
 			"txHash":       tx.Hash,
 		})
-		log.Printf("[crypto-watcher] ✓ credited user=%s coin=%s amount=%.8f tx=%s", userID, coin, amountCrypto, tx.Hash)
+		log.Printf("[crypto-watcher] ✓ credited user=%s coin=%s amount=%.8f tx=%s", userID, coin, amountUsd, tx.Hash)
 	} else {
 		// Still pending — just upsert the tracking record
 		if _, err := h.db.Collection("crypto_deposits").UpdateByID(

@@ -42,6 +42,16 @@ type Config struct {
 	JWTPublicKeyPath string
 	JWTIssuer        string
 	AppEnv           string
+
+	// Deposit fee: fraction of each deposit kept by the house before crediting.
+	// e.g. 0.05 = 5% fee. Applies to both crypto and MoMo deposits.
+	// Set to 0.0 to disable.
+	DepositFeeRate float64
+
+	// Withdrawal fee: fraction of each withdrawal kept by the house.
+	// e.g. 0.05 = 5% fee. Applies to MoMo withdrawals.
+	// Set to 0.0 to disable.
+	WithdrawalFeeRate float64
 }
 
 func Load() *Config {
@@ -116,6 +126,8 @@ func Load() *Config {
 		JWTPublicKeyPath:            getEnv("JWT_PUBLIC_KEY_PATH", "/run/secrets/jwt_public.pem"),
 		JWTIssuer:                   getEnv("JWT_ISSUER", "gamehub-auth"),
 		AppEnv:                      appEnv,
+		DepositFeeRate:              getFloatEnv("DEPOSIT_FEE_RATE", 0.0),
+		WithdrawalFeeRate:           getFloatEnv("WITHDRAWAL_FEE_RATE", 0.0),
 	}
 }
 
@@ -154,6 +166,15 @@ func getIntEnv(key string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+func getFloatEnv(key string, fallback float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return fallback
 }
 
 func splitAndTrim(raw string) []string {
