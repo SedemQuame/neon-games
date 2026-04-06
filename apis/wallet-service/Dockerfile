@@ -1,9 +1,13 @@
 FROM golang:1.22-alpine AS builder
-WORKDIR /app
-COPY apis/wallet-service/go.mod apis/wallet-service/go.sum ./
-RUN go mod download
-COPY apis/wallet-service/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /wallet-service ./cmd/main.go
+WORKDIR /src
+COPY . .
+RUN set -eux; \
+    service_dir="/src"; \
+    if [ ! -f "$service_dir/go.mod" ]; then service_dir="/src/apis/wallet-service"; fi; \
+    test -f "$service_dir/go.mod"; \
+    cd "$service_dir"; \
+    go mod download; \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /wallet-service ./cmd/main.go
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=builder /wallet-service /wallet-service

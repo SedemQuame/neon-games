@@ -1,9 +1,14 @@
 FROM golang:1.22-alpine AS builder
-WORKDIR /app
-COPY apis/payment-gateway/go.mod apis/payment-gateway/go.sum ./
-RUN apk add --no-cache ca-certificates && go mod download
-COPY apis/payment-gateway/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /payment-gateway ./cmd/main.go
+WORKDIR /src
+RUN apk add --no-cache ca-certificates
+COPY . .
+RUN set -eux; \
+    service_dir="/src"; \
+    if [ ! -f "$service_dir/go.mod" ]; then service_dir="/src/apis/payment-gateway"; fi; \
+    test -f "$service_dir/go.mod"; \
+    cd "$service_dir"; \
+    go mod download; \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /payment-gateway ./cmd/main.go
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=builder /payment-gateway /payment-gateway
