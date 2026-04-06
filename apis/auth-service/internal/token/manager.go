@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -81,17 +82,31 @@ func (m *Manager) Parse(tokenString string) (*Claims, error) {
 }
 
 func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
+	if pem := pemFromEnv("JWT_PRIVATE_KEY_PEM"); pem != "" {
+		return jwt.ParseRSAPrivateKeyFromPEM([]byte(pem))
+	}
 	bytes, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	return jwt.ParseRSAPrivateKeyFromPEM(bytes)
 }
 
 func loadPublicKey(path string) (*rsa.PublicKey, error) {
+	if pem := pemFromEnv("JWT_PUBLIC_KEY_PEM"); pem != "" {
+		return jwt.ParseRSAPublicKeyFromPEM([]byte(pem))
+	}
 	bytes, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	return jwt.ParseRSAPublicKeyFromPEM(bytes)
+}
+
+func pemFromEnv(key string) string {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return ""
+	}
+	return strings.ReplaceAll(raw, `\n`, "\n")
 }

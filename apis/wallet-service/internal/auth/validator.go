@@ -28,7 +28,7 @@ type Validator struct {
 
 // NewValidator loads the RSA public key from disk.
 func NewValidator(publicKeyPath, issuer string) (*Validator, error) {
-	data, err := os.ReadFile(publicKeyPath)
+	data, err := loadPublicKeyPEM(publicKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("read public key: %w", err)
 	}
@@ -96,4 +96,11 @@ func extractToken(header string) string {
 		return strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
 	}
 	return header
+}
+
+func loadPublicKeyPEM(path string) ([]byte, error) {
+	if pem := strings.TrimSpace(os.Getenv("JWT_PUBLIC_KEY_PEM")); pem != "" {
+		return []byte(strings.ReplaceAll(pem, `\n`, "\n")), nil
+	}
+	return os.ReadFile(path)
 }
