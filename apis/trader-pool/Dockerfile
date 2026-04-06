@@ -1,6 +1,7 @@
 FROM golang:1.25-alpine AS builder
 ENV GOTOOLCHAIN=auto
 WORKDIR /src
+RUN apk add --no-cache ca-certificates
 COPY . .
 RUN set -eux; \
     service_dir="/src"; \
@@ -12,6 +13,7 @@ RUN set -eux; \
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=builder /trader-pool /trader-pool
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 EXPOSE 8005
 USER nonroot:nonroot
 ENTRYPOINT ["/trader-pool"]
