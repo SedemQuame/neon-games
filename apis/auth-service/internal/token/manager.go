@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	if pem := pemFromEnv("JWT_PRIVATE_KEY_PEM"); pem != "" {
 		return jwt.ParseRSAPrivateKeyFromPEM([]byte(pem))
 	}
-	bytes, err := os.ReadFile(path)
+	bytes, err := readPEMFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -96,7 +97,7 @@ func loadPublicKey(path string) (*rsa.PublicKey, error) {
 	if pem := pemFromEnv("JWT_PUBLIC_KEY_PEM"); pem != "" {
 		return jwt.ParseRSAPublicKeyFromPEM([]byte(pem))
 	}
-	bytes, err := os.ReadFile(path)
+	bytes, err := readPEMFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -109,4 +110,55 @@ func pemFromEnv(key string) string {
 		return ""
 	}
 	return strings.ReplaceAll(raw, `\n`, "\n")
+}
+
+func readPEMFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err == nil {
+		return data, nil
+	}
+
+	info, statErr := os.Stat(path)
+	if statErr != nil || !info.IsDir() {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	preferredName := filepath.Base(filepath.Clean(path))
+	var firstPEM string
+	var loneFile string
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		fullPath := filepath.Join(path, entry.Name())
+		if entry.Name() == preferredName {
+			return os.ReadFile(fullPath)
+		}
+
+		if strings.HasSuffix(strings.ToLower(entry.Name()), ".pem") && firstPEM == "" {
+			firstPEM = fullPath
+		}
+
+		if loneFile == "" {
+			loneFile = fullPath
+		} else {
+			loneFile = "-"
+		}
+	}
+
+	if firstPEM != "" {
+		return os.ReadFile(firstPEM)
+	}
+	if loneFile != "" && loneFile != "-" {
+		return os.ReadFile(loneFile)
+	}
+
+	return nil, fmt.Errorf("%s is a directory and does not contain a readable PEM file", path)
 }

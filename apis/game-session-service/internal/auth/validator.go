@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -102,5 +103,56 @@ func loadPublicKeyPEM(path string) ([]byte, error) {
 	if pem := strings.TrimSpace(os.Getenv("JWT_PUBLIC_KEY_PEM")); pem != "" {
 		return []byte(strings.ReplaceAll(pem, `\n`, "\n")), nil
 	}
-	return os.ReadFile(path)
+	return readPEMFile(path)
+}
+
+func readPEMFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err == nil {
+		return data, nil
+	}
+
+	info, statErr := os.Stat(path)
+	if statErr != nil || !info.IsDir() {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	preferredName := filepath.Base(filepath.Clean(path))
+	var firstPEM string
+	var loneFile string
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		fullPath := filepath.Join(path, entry.Name())
+		if entry.Name() == preferredName {
+			return os.ReadFile(fullPath)
+		}
+
+		if strings.HasSuffix(strings.ToLower(entry.Name()), ".pem") && firstPEM == "" {
+			firstPEM = fullPath
+		}
+
+		if loneFile == "" {
+			loneFile = fullPath
+		} else {
+			loneFile = "-"
+		}
+	}
+
+	if firstPEM != "" {
+		return os.ReadFile(firstPEM)
+	}
+	if loneFile != "" && loneFile != "-" {
+		return os.ReadFile(loneFile)
+	}
+
+	return nil, fmt.Errorf("%s is a directory and does not contain a readable PEM file", path)
 }
