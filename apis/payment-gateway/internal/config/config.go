@@ -194,26 +194,26 @@ func splitAndTrim(raw string) []string {
 }
 
 func resolveRedisAddr() string {
-	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
+	if addr, _, ok := redisFromURL(os.Getenv("REDIS_URL")); ok {
 		return addr
 	}
 	if host := os.Getenv("REDISHOST"); host != "" {
 		return net.JoinHostPort(host, getEnv("REDISPORT", "6379"))
 	}
-	if addr, _, ok := redisFromURL(os.Getenv("REDIS_URL")); ok {
+	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
 		return addr
 	}
 	return "localhost:6379"
 }
 
 func resolveRedisPassword() string {
-	if password := os.Getenv("REDIS_PASSWORD"); password != "" {
+	if _, password, ok := redisFromURL(os.Getenv("REDIS_URL")); ok {
 		return password
 	}
 	if password := os.Getenv("REDISPASSWORD"); password != "" {
 		return password
 	}
-	if _, password, ok := redisFromURL(os.Getenv("REDIS_URL")); ok {
+	if password := os.Getenv("REDIS_PASSWORD"); password != "" {
 		return password
 	}
 	return ""
