@@ -33,3 +33,19 @@ func TestResolveRedisFromURL(t *testing.T) {
 		t.Fatalf("resolveRedisPassword() = %q, want %q", got, "railway-secret")
 	}
 }
+
+func TestResolveRedisFromBareHostURLValue(t *testing.T) {
+	t.Setenv("REDIS_ADDR", "localhost:6379")
+	t.Setenv("REDISHOST", "")
+	t.Setenv("REDISPORT", "")
+	t.Setenv("REDIS_PASSWORD", "shared-secret")
+	t.Setenv("REDISPASSWORD", "")
+	t.Setenv("REDIS_URL", "redis.railway.internal")
+
+	if got := resolveRedisAddr(); got != "redis.railway.internal:6379" {
+		t.Fatalf("resolveRedisAddr() = %q, want %q", got, "redis.railway.internal:6379")
+	}
+	if got := resolveRedisPassword(); got != "shared-secret" {
+		t.Fatalf("resolveRedisPassword() = %q, want %q", got, "shared-secret")
+	}
+}

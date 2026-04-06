@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -63,7 +64,7 @@ func resolveRedisAddr() string {
 }
 
 func resolveRedisPassword() string {
-	if _, password, ok := redisFromURL(os.Getenv("REDIS_URL")); ok {
+	if _, password, ok := redisFromURL(os.Getenv("REDIS_URL")); ok && password != "" {
 		return password
 	}
 	if password := os.Getenv("REDISPASSWORD"); password != "" {
@@ -78,6 +79,13 @@ func resolveRedisPassword() string {
 func redisFromURL(raw string) (addr, password string, ok bool) {
 	if raw == "" {
 		return "", "", false
+	}
+	raw = strings.TrimSpace(raw)
+	if !strings.Contains(raw, "://") {
+		if _, _, err := net.SplitHostPort(raw); err == nil {
+			return raw, "", true
+		}
+		return net.JoinHostPort(raw, "6379"), "", true
 	}
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Host == "" {
