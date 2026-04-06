@@ -19,10 +19,10 @@ func TestResolveRedisFromHostPortVars(t *testing.T) {
 }
 
 func TestResolveRedisFromURL(t *testing.T) {
-	t.Setenv("REDIS_ADDR", "")
+	t.Setenv("REDIS_ADDR", "localhost:6379")
 	t.Setenv("REDISHOST", "")
 	t.Setenv("REDISPORT", "")
-	t.Setenv("REDIS_PASSWORD", "")
+	t.Setenv("REDIS_PASSWORD", "local-secret")
 	t.Setenv("REDISPASSWORD", "")
 	t.Setenv("REDIS_URL", "redis://default:railway-secret@redis.railway.internal:6379")
 
