@@ -6,6 +6,8 @@ FROM golang:1.22-alpine AS builder
 
 WORKDIR /src
 
+RUN apk add --no-cache ca-certificates
+
 COPY . .
 
 RUN set -eux; \
@@ -20,6 +22,7 @@ RUN set -eux; \
 FROM gcr.io/distroless/static-debian12
 
 COPY --from=builder /auth-service /auth-service
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 EXPOSE 8001
 
