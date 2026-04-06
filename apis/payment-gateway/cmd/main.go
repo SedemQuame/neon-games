@@ -101,6 +101,7 @@ func main() {
 	// --- Fiber App ---
 	app := fiber.New(fiber.Config{
 		AppName:      "Glory Grid Payment Gateway",
+		Network:      "tcp",
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	})

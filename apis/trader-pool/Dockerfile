@@ -1,9 +1,9 @@
 FROM golang:1.25-alpine AS builder
 ENV GOTOOLCHAIN=auto
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY apis/trader-pool/go.mod apis/trader-pool/go.sum ./
 RUN go mod download
-COPY . .
+COPY apis/trader-pool/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /trader-pool ./cmd/main.go
 
 FROM gcr.io/distroless/static-debian12

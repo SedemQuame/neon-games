@@ -41,6 +41,7 @@ func main() {
 	// --- Fiber App (admin/health only — not in public gateway) ---
 	app := fiber.New(fiber.Config{
 		AppName:      "Glory Grid Trader Pool",
+		Network:      "tcp",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	})

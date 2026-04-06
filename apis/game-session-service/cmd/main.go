@@ -69,6 +69,7 @@ func main() {
 	// --- Fiber App ---
 	app := fiber.New(fiber.Config{
 		AppName:      "Glory Grid Game Session Service",
+		Network:      "tcp",
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	})

@@ -123,8 +123,8 @@ services:
 
   auth-service:
     build:
-      context: ./auth-service
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apis/auth-service/Dockerfile
     container_name: gamehub_auth
     restart: unless-stopped
     env_file: .env
@@ -148,8 +148,8 @@ services:
 
   game-session-service:
     build:
-      context: ./game-session-service
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apis/game-session-service/Dockerfile
     container_name: gamehub_game_session
     restart: unless-stopped
     env_file: .env
@@ -177,8 +177,8 @@ services:
 
   payment-gateway:
     build:
-      context: ./payment-gateway
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apis/payment-gateway/Dockerfile
     container_name: gamehub_payment
     restart: unless-stopped
     env_file: .env
@@ -204,8 +204,8 @@ services:
 
   wallet-service:
     build:
-      context: ./wallet-service
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apis/wallet-service/Dockerfile
     container_name: gamehub_wallet
     restart: unless-stopped
     env_file: .env
@@ -228,8 +228,8 @@ services:
 
   trader-pool:
     build:
-      context: ./trader-pool
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: apis/trader-pool/Dockerfile
     container_name: gamehub_trader
     restart: unless-stopped
     env_file: .env
