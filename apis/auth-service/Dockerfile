@@ -4,15 +4,17 @@
 
 FROM golang:1.22-alpine AS builder
 
-WORKDIR /app
+WORKDIR /src
 
-# Cache dependencies first (only re-downloaded when go.mod/go.sum change)
-COPY apis/auth-service/go.mod apis/auth-service/go.sum ./
-RUN go mod download
+COPY . .
 
-COPY apis/auth-service/ ./
-
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /auth-service ./cmd/main.go
+RUN set -eux; \
+    service_dir="/src"; \
+    if [ ! -f "$service_dir/go.mod" ]; then service_dir="/src/apis/auth-service"; fi; \
+    test -f "$service_dir/go.mod"; \
+    cd "$service_dir"; \
+    go mod download; \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /auth-service ./cmd/main.go
 
 # --- Final image ---
 FROM gcr.io/distroless/static-debian12
