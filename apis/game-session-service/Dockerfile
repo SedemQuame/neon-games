@@ -1,9 +1,9 @@
 FROM golang:1.25-alpine AS builder
 ENV GOTOOLCHAIN=auto
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY apis/game-session-service/go.mod apis/game-session-service/go.sum ./
 RUN go mod download
-COPY . .
+COPY apis/game-session-service/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /game-session-service ./cmd/main.go
 
 FROM gcr.io/distroless/static-debian12

@@ -1,8 +1,8 @@
 FROM golang:1.22-alpine AS builder
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY apis/payment-gateway/go.mod apis/payment-gateway/go.sum ./
 RUN apk add --no-cache ca-certificates && go mod download
-COPY . .
+COPY apis/payment-gateway/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /payment-gateway ./cmd/main.go
 
 FROM gcr.io/distroless/static-debian12

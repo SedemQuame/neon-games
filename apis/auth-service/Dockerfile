@@ -7,10 +7,10 @@ FROM golang:1.22-alpine AS builder
 WORKDIR /app
 
 # Cache dependencies first (only re-downloaded when go.mod/go.sum change)
-COPY go.mod go.sum ./
+COPY apis/auth-service/go.mod apis/auth-service/go.sum ./
 RUN go mod download
 
-COPY . .
+COPY apis/auth-service/ ./
 
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /auth-service ./cmd/main.go
 
