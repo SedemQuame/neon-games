@@ -1,0 +1,6 @@
+.env
+scripts/node_modules
+infra/dev-secrets
+infra/nginx
+**/*.pem
+*.log

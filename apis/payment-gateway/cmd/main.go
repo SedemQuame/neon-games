@@ -141,7 +141,7 @@ func main() {
 
 	// ==========================================================================
 	// WEBHOOK ROUTES (provider → our server; no user JWT, HMAC-verified)
-	// IP-whitelist enforced by NGINX upstream — these are NOT in the public gateway
+	// These are exposed through the internal gateway; provider HMAC validation remains here.
 	// ==========================================================================
 	webhooks := app.Group("/webhooks/payment")
 

@@ -59,8 +59,8 @@ func Load() *Config {
 		MongoURI:       mustGetEnv("MONGO_URI"),
 		RedisAddr:      resolveRedisAddr(),
 		RedisPassword:  resolveRedisPassword(),
-		JWTPrivateKey:  getEnv("JWT_PRIVATE_KEY_PATH", "secrets/jwt_private.pem"),
-		JWTPublicKey:   getEnv("JWT_PUBLIC_KEY_PATH", "secrets/jwt_public.pem"),
+		JWTPrivateKey:  getEnv("JWT_PRIVATE_KEY_PATH", "/app/secrets/jwt_private.pem"),
+		JWTPublicKey:   getEnv("JWT_PUBLIC_KEY_PATH", "/app/secrets/jwt_public.pem"),
 		AccessTTLMin:   getEnv("JWT_ACCESS_TTL_MINUTES", "15"),
 		RefreshTTLDays: getEnv("JWT_REFRESH_TTL_DAYS", "7"),
 		AllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "*"),
@@ -81,7 +81,7 @@ func Load() *Config {
 		PasswordResetURL:        getEnv("PASSWORD_RESET_URL", "https://glorygrid.local/reset-password"),
 		PasswordResetTTLMinutes: getEnv("PASSWORD_RESET_TTL_MINUTES", "30"),
 
-		PaymentGatewayURL: getEnv("PAYMENT_GATEWAY_URL", "http://payment-gateway:8003"),
+		PaymentGatewayURL: getEnv("PAYMENT_GATEWAY_URL", "http://127.0.0.1:8003"),
 
 		AppEnv:   getEnv("APP_ENV", "development"),
 		LogLevel: getEnv("LOG_LEVEL", "info"),

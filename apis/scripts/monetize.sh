@@ -151,7 +151,7 @@ cmd_deposit_fee() {
 cmd_apply() {
   COMPOSE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
   echo -e "${CYAN}Restarting affected services…${RESET}"
-  docker-compose -f "$COMPOSE_DIR/docker-compose.yml" restart trader-pool payment-gateway
+  docker compose -f "$COMPOSE_DIR/docker-compose.yml" restart gamehub-backend
   echo -e "${GREEN}✓ Services restarted. Changes are live.${RESET}"
 }
 
