@@ -16,8 +16,8 @@ type Config struct {
 	MongoURI       string
 	RedisAddr      string
 	RedisPassword  string
-	JWTPrivateKey  string // path to PEM file
-	JWTPublicKey   string // path to PEM file
+	JWTPrivateKey  string // optional path to PEM file
+	JWTPublicKey   string // optional path to PEM file
 	AccessTTLMin   string
 	RefreshTTLDays string
 	AccessTTL      time.Duration
@@ -59,8 +59,8 @@ func Load() *Config {
 		MongoURI:       mustGetEnv("MONGO_URI"),
 		RedisAddr:      resolveRedisAddr(),
 		RedisPassword:  resolveRedisPassword(),
-		JWTPrivateKey:  getEnv("JWT_PRIVATE_KEY_PATH", "/app/secrets/jwt_private.pem"),
-		JWTPublicKey:   getEnv("JWT_PUBLIC_KEY_PATH", "/app/secrets/jwt_public.pem"),
+		JWTPrivateKey:  getEnv("JWT_PRIVATE_KEY_PATH", ""),
+		JWTPublicKey:   getEnv("JWT_PUBLIC_KEY_PATH", ""),
 		AccessTTLMin:   getEnv("JWT_ACCESS_TTL_MINUTES", "15"),
 		RefreshTTLDays: getEnv("JWT_REFRESH_TTL_DAYS", "7"),
 		AllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "*"),

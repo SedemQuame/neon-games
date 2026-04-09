@@ -125,7 +125,7 @@ func Load() *Config {
 		CryptoWebhookURL:            getEnv("CRYPTO_WEBHOOK_URL", "https://api.gamehub.io/webhooks/payment/crypto"),
 		WalletServiceURL:            getEnv("WALLET_SERVICE_URL", "http://127.0.0.1:8004"),
 		InternalServiceKey:          getEnv("INTERNAL_SERVICE_KEY", "dev-internal-key"),
-		JWTPublicKeyPath:            getEnv("JWT_PUBLIC_KEY_PATH", "/app/secrets/jwt_public.pem"),
+		JWTPublicKeyPath:            getEnv("JWT_PUBLIC_KEY_PATH", ""),
 		JWTIssuer:                   getEnv("JWT_ISSUER", "gamehub-auth"),
 		AppEnv:                      appEnv,
 		DepositFeeRate:              getFloatEnv("DEPOSIT_FEE_RATE", 0.0),

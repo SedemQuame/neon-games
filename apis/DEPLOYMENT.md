@@ -85,12 +85,14 @@ At minimum, staging needs:
 
 - `MONGO_URI`
 - `REDIS_PASSWORD`
-- `JWT_PRIVATE_KEY_PATH` or `JWT_PRIVATE_KEY_PEM`
-- `JWT_PUBLIC_KEY_PATH` or `JWT_PUBLIC_KEY_PEM`
+- `JWT_PRIVATE_KEY_PEM` or `JWT_PRIVATE_KEY_PATH`
+- `JWT_PUBLIC_KEY_PEM` or `JWT_PUBLIC_KEY_PATH`
 - `INTERNAL_SERVICE_KEY`
 - whichever payment and Deriv credentials are required for the integrations you intend to enable
 
-The default Compose setup mounts JWT files from `apis/infra/dev-secrets` into `/app/secrets`.
+For production, use [`.env.production.example`](/Users/sedemquame/Documents/Commercial/self/games/GameHub/apis/.env.production.example) as the source of truth and paste those entries into your platform's environment-variable UI. The preferred production path is `JWT_PRIVATE_KEY_PEM` and `JWT_PUBLIC_KEY_PEM`, not mounted key files.
+
+The default local Compose setup still mounts JWT files from `apis/infra/dev-secrets` into `/app/secrets`.
 
 ## Compose Usage
 

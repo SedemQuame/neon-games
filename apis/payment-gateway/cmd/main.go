@@ -28,6 +28,8 @@ import (
 )
 
 func main() {
+	log.SetOutput(os.Stdout)
+
 	cfg := config.Load()
 
 	tokenValidator, err := auth.NewValidator(cfg.JWTPublicKeyPath, cfg.JWTIssuer)

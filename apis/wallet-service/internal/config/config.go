@@ -29,7 +29,7 @@ func Load() *Config {
 		InternalServiceKey: getEnv("INTERNAL_SERVICE_KEY", "dev-internal-key"),
 		AllowedOrigins:     getEnv("CORS_ALLOWED_ORIGINS", "*"),
 		AppEnv:             getEnv("APP_ENV", "development"),
-		JWTPublicKeyPath:   getEnv("JWT_PUBLIC_KEY_PATH", "/app/secrets/jwt_public.pem"),
+		JWTPublicKeyPath:   getEnv("JWT_PUBLIC_KEY_PATH", ""),
 		JWTIssuer:          getEnv("JWT_ISSUER", "gamehub-auth"),
 	}
 	return cfg

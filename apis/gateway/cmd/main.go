@@ -27,6 +27,8 @@ type route struct {
 }
 
 func main() {
+	log.SetOutput(os.Stdout)
+
 	gatewayPort := env("GATEWAY_PORT", "80")
 
 	upstreams := []*upstream{

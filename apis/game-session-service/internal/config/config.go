@@ -36,7 +36,7 @@ func Load() *Config {
 		OrderQueue:       getEnv("TRADE_ORDER_QUEUE", "trade:orders"),
 		OutcomePrefix:    getEnv("GAME_OUTCOME_PREFIX", "game:outcome"),
 		AppEnv:           getEnv("APP_ENV", "development"),
-		JWTPublicKeyPath: getEnv("JWT_PUBLIC_KEY_PATH", "/app/secrets/jwt_public.pem"),
+		JWTPublicKeyPath: getEnv("JWT_PUBLIC_KEY_PATH", ""),
 		JWTIssuer:        getEnv("JWT_ISSUER", "gamehub-auth"),
 		StaleSweepSec:    getEnvInt("GAME_STALE_SWEEP_INTERVAL_SECONDS", 20),
 		StaleRefundSec:   getEnvInt("GAME_STALE_REFUND_SECONDS", 90),

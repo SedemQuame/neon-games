@@ -10,19 +10,8 @@ TRADER_POOL_PORT="${TRADER_POOL_PORT:-8005}"
 GATEWAY_PORT="${GATEWAY_PORT:-80}"
 START_EMBEDDED_REDIS="${START_EMBEDDED_REDIS:-true}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-}"
-
-if [[ -z "${JWT_PRIVATE_KEY_PEM:-}" ]]; then
-  export JWT_PRIVATE_KEY_PATH="/app/secrets/jwt_private.pem"
-fi
-
-if [[ -z "${JWT_PUBLIC_KEY_PEM:-}" ]]; then
-  export JWT_PUBLIC_KEY_PATH="/app/secrets/jwt_public.pem"
-fi
-
-export AUTH_SERVICE_URL="http://127.0.0.1:${AUTH_SERVICE_PORT}"
 export PAYMENT_GATEWAY_URL="http://127.0.0.1:${PAYMENT_GATEWAY_PORT}"
 export WALLET_SERVICE_URL="http://127.0.0.1:${WALLET_SERVICE_PORT}"
-export TRADER_POOL_URL="http://127.0.0.1:${TRADER_POOL_PORT}"
 export GATEWAY_PORT
 
 pids=()
