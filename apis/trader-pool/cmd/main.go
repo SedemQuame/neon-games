@@ -20,6 +20,8 @@ import (
 )
 
 func main() {
+	log.SetOutput(os.Stdout)
+
 	cfg := config.Load()
 
 	// --- Redis (account registry + session locks) ---

@@ -49,7 +49,7 @@ func Load() *Config {
 		Port:             getEnv("PORT", "8005"),
 		RedisAddr:        resolveRedisAddr(),
 		RedisPassword:    resolveRedisPassword(),
-		WalletServiceURL: getEnv("WALLET_SERVICE_URL", "http://wallet-service:8004"),
+		WalletServiceURL: getEnv("WALLET_SERVICE_URL", "http://127.0.0.1:8004"),
 		InternalKey:      getEnv("INTERNAL_SERVICE_KEY", "dev-internal-key"),
 		OrderQueue:       getEnv("TRADE_ORDER_QUEUE", "trade:orders"),
 		OutcomePrefix:    getEnv("GAME_OUTCOME_PREFIX", "game:outcome"),

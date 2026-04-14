@@ -8,7 +8,7 @@
 #   ./test_deposit_e2e.sh
 #
 # Prerequisites:
-#   - Docker containers running (docker-compose up --build -d)
+#   - Backend container running (docker compose up --build -d)
 #   - curl and jq installed
 # =============================================================================
 
@@ -56,7 +56,7 @@ AUTH_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/auth/heal
 if [[ "$AUTH_HEALTH" == "200" ]]; then
   echo -e "${GREEN}OK${NC}"
 else
-  echo -e "${YELLOW}WARN (HTTP $AUTH_HEALTH via nginx, trying direct)${NC}"
+  echo -e "${YELLOW}WARN (HTTP $AUTH_HEALTH via gateway, trying direct)${NC}"
 fi
 
 echo -n "  Payment gateway... "
@@ -93,7 +93,7 @@ if [[ -z "$ACCESS_TOKEN" || "$ACCESS_TOKEN" == "null" ]]; then
   USER_ID=$(echo "$AUTH_RESP" | jq -r '.user._id // .user.id // empty' 2>/dev/null)
 
   if [[ -z "$ACCESS_TOKEN" || "$ACCESS_TOKEN" == "null" ]]; then
-    fail "Authentication failed on both nginx and direct" "$AUTH_RESP"
+    fail "Authentication failed on both gateway and direct" "$AUTH_RESP"
     exit 1
   fi
 fi
@@ -150,7 +150,7 @@ elif [[ "$HTTP_CODE" == "500" ]]; then
     echo "  $line"
   done
 
-  # Also try direct connection to payment gateway (bypass nginx)
+  # Also try direct connection to payment gateway (bypass the gateway)
   info "Retrying with direct payment-gateway connection (port 8003)..."
   DEPOSIT_RESP2=$(curl -s -w "\n%{http_code}" -X POST "http://localhost:8003/api/v1/payments/momo/deposit" \
     -H "Authorization: Bearer $ACCESS_TOKEN" \

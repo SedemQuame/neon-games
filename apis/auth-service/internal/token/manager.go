@@ -86,9 +86,12 @@ func loadPrivateKey(path string) (*rsa.PrivateKey, error) {
 	if pem := pemFromEnv("JWT_PRIVATE_KEY_PEM"); pem != "" {
 		return jwt.ParseRSAPrivateKeyFromPEM([]byte(pem))
 	}
+	if strings.TrimSpace(path) == "" {
+		return nil, fmt.Errorf("JWT_PRIVATE_KEY_PEM or JWT_PRIVATE_KEY_PATH must be set")
+	}
 	bytes, err := readPEMFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
+		return nil, fmt.Errorf("set JWT_PRIVATE_KEY_PEM or point JWT_PRIVATE_KEY_PATH to a readable PEM file: %w", err)
 	}
 	return jwt.ParseRSAPrivateKeyFromPEM(bytes)
 }
@@ -97,9 +100,12 @@ func loadPublicKey(path string) (*rsa.PublicKey, error) {
 	if pem := pemFromEnv("JWT_PUBLIC_KEY_PEM"); pem != "" {
 		return jwt.ParseRSAPublicKeyFromPEM([]byte(pem))
 	}
+	if strings.TrimSpace(path) == "" {
+		return nil, fmt.Errorf("JWT_PUBLIC_KEY_PEM or JWT_PUBLIC_KEY_PATH must be set")
+	}
 	bytes, err := readPEMFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
+		return nil, fmt.Errorf("set JWT_PUBLIC_KEY_PEM or point JWT_PUBLIC_KEY_PATH to a readable PEM file: %w", err)
 	}
 	return jwt.ParseRSAPublicKeyFromPEM(bytes)
 }
@@ -113,6 +119,10 @@ func pemFromEnv(key string) string {
 }
 
 func readPEMFile(path string) ([]byte, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, fmt.Errorf("no PEM file path configured")
+	}
 	data, err := os.ReadFile(path)
 	if err == nil {
 		return data, nil

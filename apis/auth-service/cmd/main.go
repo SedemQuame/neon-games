@@ -60,6 +60,8 @@ type refreshSession struct {
 }
 
 func main() {
+	log.SetOutput(os.Stdout)
+
 	cfg = config.Load()
 	mailClient = mailer.New(cfg.ResendAPIKey, cfg.EmailFrom, cfg.PasswordResetURL)
 

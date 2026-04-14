@@ -103,10 +103,21 @@ func loadPublicKeyPEM(path string) ([]byte, error) {
 	if pem := strings.TrimSpace(os.Getenv("JWT_PUBLIC_KEY_PEM")); pem != "" {
 		return []byte(strings.ReplaceAll(pem, `\n`, "\n")), nil
 	}
-	return readPEMFile(path)
+	if strings.TrimSpace(path) == "" {
+		return nil, fmt.Errorf("JWT_PUBLIC_KEY_PEM or JWT_PUBLIC_KEY_PATH must be set")
+	}
+	data, err := readPEMFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("set JWT_PUBLIC_KEY_PEM or point JWT_PUBLIC_KEY_PATH to a readable PEM file: %w", err)
+	}
+	return data, nil
 }
 
 func readPEMFile(path string) ([]byte, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, fmt.Errorf("no PEM file path configured")
+	}
 	data, err := os.ReadFile(path)
 	if err == nil {
 		return data, nil
