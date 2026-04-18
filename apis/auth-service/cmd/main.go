@@ -51,6 +51,8 @@ var (
 	googleHTTPClient   = &http.Client{Timeout: 10 * time.Second}
 	firebaseHTTPClient = &http.Client{Timeout: 10 * time.Second}
 	firebaseCertCache  = &firebasePublicKeyCache{}
+	allowAllOrigins    bool
+	allowedOriginSet   map[string]struct{}
 )
 
 const (
@@ -83,6 +85,7 @@ func main() {
 	log.SetOutput(os.Stdout)
 
 	cfg = config.Load()
+	configureAllowedOrigins(cfg.AllowedOrigins)
 	mailClient = mailer.New(cfg.ResendAPIKey, cfg.EmailFrom, cfg.PasswordResetURL)
 
 	// --- MongoDB ---
@@ -1591,7 +1594,18 @@ func consumePasswordResetToken(ctx context.Context, token string) (bson.M, error
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", cfg.AllowedOrigins)
+		requestOrigin := strings.TrimSpace(r.Header.Get("Origin"))
+		allowOrigin, allowed := resolveAllowedOrigin(requestOrigin)
+		if requestOrigin != "" && !allowed {
+			respondError(w, http.StatusForbidden, "origin not allowed")
+			return
+		}
+		if allowOrigin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+			if allowOrigin != "*" {
+				appendVaryHeader(w, "Origin")
+			}
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Internal-Key")
 		if r.Method == http.MethodOptions {
@@ -1640,6 +1654,83 @@ func authClaimsFromContext(ctx context.Context) (*token.Claims, bool) {
 	}
 	claims, ok := ctx.Value(ctxUserKey).(*token.Claims)
 	return claims, ok
+}
+
+func configureAllowedOrigins(raw string) {
+	allowedOriginSet = make(map[string]struct{})
+	allowAllOrigins = false
+
+	for _, part := range strings.Split(raw, ",") {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		if value == "*" {
+			allowAllOrigins = true
+			continue
+		}
+		normalized := normalizeOrigin(value)
+		if normalized == "" {
+			continue
+		}
+		allowedOriginSet[normalized] = struct{}{}
+	}
+
+	if allowAllOrigins {
+		log.Printf("CORS: allowing all origins")
+		return
+	}
+	if len(allowedOriginSet) == 0 {
+		log.Printf("CORS: no allowed origins configured; defaulting to deny when Origin is present")
+		return
+	}
+	log.Printf("CORS: allowing %d origin(s)", len(allowedOriginSet))
+}
+
+func resolveAllowedOrigin(origin string) (string, bool) {
+	if allowAllOrigins {
+		return "*", true
+	}
+	if origin == "" {
+		return "", true
+	}
+	normalized := normalizeOrigin(origin)
+	if normalized == "" {
+		return "", false
+	}
+	_, ok := allowedOriginSet[normalized]
+	if !ok {
+		return "", false
+	}
+	// Echo request origin for explicit allow-list mode.
+	return origin, true
+}
+
+func normalizeOrigin(origin string) string {
+	origin = strings.TrimSpace(origin)
+	origin = strings.TrimRight(origin, "/")
+	if origin == "" {
+		return ""
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return strings.ToLower(origin)
+	}
+	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
+}
+
+func appendVaryHeader(w http.ResponseWriter, value string) {
+	existing := w.Header().Get("Vary")
+	if existing == "" {
+		w.Header().Set("Vary", value)
+		return
+	}
+	for _, part := range strings.Split(existing, ",") {
+		if strings.EqualFold(strings.TrimSpace(part), value) {
+			return
+		}
+	}
+	w.Header().Set("Vary", existing+", "+value)
 }
 
 func registerRoute(mux *http.ServeMux, method, pattern string, handler http.HandlerFunc) {
