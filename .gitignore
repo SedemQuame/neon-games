@@ -47,6 +47,10 @@ game_trader_app/android/key.properties
 **/.pub-cache/
 **/.pub/
 **/build/
+!game_trader_app/build/
+game_trader_app/build/**
+!game_trader_app/build/web/
+!game_trader_app/build/web/**
 **/coverage/
 **/doc/api/
 **/ios/Flutter/.last_build_id
