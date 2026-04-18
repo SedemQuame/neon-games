@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "104688168952",
+    "project_id": "glory-grid-b90a3",
+    "storage_bucket": "glory-grid-b90a3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:104688168952:android:322e781e28d2d49462b00d",
+        "android_client_info": {
+          "package_name": "com.legendarypixelsid.glorygrid"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDEKfhKv6gwEDF-X6MIs1dZle9hOaMesVs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

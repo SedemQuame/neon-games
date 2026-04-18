@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_client.dart';
 import 'app_logger.dart';
 import 'auth_service.dart';
+import 'firebase_auth_service.dart';
 import 'game_service.dart';
 import 'models.dart';
 import 'payment_service.dart';
@@ -22,6 +23,7 @@ class SessionManager extends ChangeNotifier {
       _wallet = WalletService(client),
       _payments = PaymentService(client),
       _game = GameService(client),
+      _firebaseAuth = FirebaseAuthService(),
       _secureStorage = const FlutterSecureStorage() {
     _gameEventsSub = _game.events.listen(_handleGameEvent);
     unawaited(_bootstrap());
@@ -32,6 +34,7 @@ class SessionManager extends ChangeNotifier {
   final WalletService _wallet;
   final PaymentService _payments;
   final GameService _game;
+  final FirebaseAuthService _firebaseAuth;
   final FlutterSecureStorage _secureStorage;
   final StreamController<GameEvent> _gameEventsCtrl =
       StreamController<GameEvent>.broadcast();
@@ -39,13 +42,12 @@ class SessionManager extends ChangeNotifier {
 
   static const _sessionKey = 'gamehub.session';
   static const _rememberMeKey = 'gamehub.rememberMe';
-  static const _rememberedEmailKey = 'gamehub.rememberedEmail';
+  static const _legacyRememberedEmailKey = 'gamehub.rememberedEmail';
 
   AuthSession? _session;
   WalletBalance? _cachedBalance;
   bool _rememberMe = false;
   bool _initialized = false;
-  String? _rememberedEmail;
   Timer? _balancePoller;
 
   AuthSession? get session => _session;
@@ -53,7 +55,6 @@ class SessionManager extends ChangeNotifier {
   WalletBalance? get cachedBalance => _cachedBalance;
   bool get rememberMe => _rememberMe;
   bool get isReady => _initialized;
-  String? get rememberedEmail => _rememberedEmail;
 
   ApiClient get client => _client;
   WalletService get walletService => _wallet;
@@ -61,38 +62,28 @@ class SessionManager extends ChangeNotifier {
   GameService get gameService => _game;
   Stream<GameEvent> get gameEvents => _gameEventsCtrl.stream;
 
-  Future<void> register({
-    required String email,
-    required String username,
-    required String password,
-  }) async {
-    _session = await _auth.register(
-      email: email,
-      username: username,
-      password: password,
-    );
-    await _persistSessionIfNeeded();
-    await _game.connect(_session!.accessToken);
-    try {
-      await refreshBalance();
-    } catch (_) {
-      // Balance refresh failures should not block registration flow.
-    }
-    _startBalancePolling();
-    notifyListeners();
+  Future<void> signInWithGoogle() async {
+    final idToken = await _firebaseAuth.signInWithGoogle();
+    final session = await _auth.loginWithFirebaseIdToken(idToken: idToken);
+    await _openSession(session, suppressBalanceErrors: true);
   }
 
-  Future<void> login({required String email, required String password}) async {
-    _session = await _auth.login(email: email, password: password);
-    await _persistSessionIfNeeded();
-    await _game.connect(_session!.accessToken);
-    try {
-      await refreshBalance();
-    } catch (_) {
-      // Ignore balance refresh errors during login; user can retry manually.
-    }
-    _startBalancePolling();
-    notifyListeners();
+  Future<void> signInWithApple() async {
+    final idToken = await _firebaseAuth.signInWithApple();
+    final session = await _auth.loginWithFirebaseIdToken(idToken: idToken);
+    await _openSession(session, suppressBalanceErrors: true);
+  }
+
+  Future<void> signInWithX() async {
+    final idToken = await _firebaseAuth.signInWithX();
+    final session = await _auth.loginWithFirebaseIdToken(idToken: idToken);
+    await _openSession(session, suppressBalanceErrors: true);
+  }
+
+  Future<void> startGuestMode() async {
+    final idToken = await _firebaseAuth.signInAnonymously();
+    final session = await _auth.loginWithFirebaseIdToken(idToken: idToken);
+    await _openSession(session, suppressBalanceErrors: true);
   }
 
   Future<WalletBalance> refreshBalance() async {
@@ -115,9 +106,22 @@ class SessionManager extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    final refreshToken = _session?.refreshToken ?? '';
+    if (refreshToken.isNotEmpty) {
+      try {
+        await _auth.logout(refreshToken: refreshToken);
+      } catch (_) {
+        // Ignore backend logout errors; local sign-out should still succeed.
+      }
+    }
     _session = null;
     _cachedBalance = null;
     await _game.disconnect();
+    try {
+      await _firebaseAuth.signOut();
+    } catch (_) {
+      // Ignore Firebase provider sign-out errors if session is already cleared.
+    }
     await _secureStorage.delete(key: _sessionKey);
     _balancePoller?.cancel();
     _balancePoller = null;
@@ -134,12 +138,24 @@ class SessionManager extends ChangeNotifier {
     await _game.connect(token);
   }
 
-  Future<void> requestPasswordReset(String email) {
-    return _auth.requestPasswordReset(email: email);
-  }
-
-  Future<void> resetPassword({required String token, required String password}) {
-    return _auth.resetPassword(token: token, password: password);
+  Future<void> _openSession(
+    AuthSession session, {
+    required bool suppressBalanceErrors,
+  }) async {
+    _session = session;
+    await _persistSessionIfNeeded();
+    await _game.connect(_session!.accessToken);
+    if (suppressBalanceErrors) {
+      try {
+        await refreshBalance();
+      } catch (_) {
+        // Ignore balance refresh errors during sign-in.
+      }
+    } else {
+      await refreshBalance();
+    }
+    _startBalancePolling();
+    notifyListeners();
   }
 
   @override
@@ -156,18 +172,18 @@ class SessionManager extends ChangeNotifier {
       AppLogger.instance.log(
         'game',
         'Result ${event.gameType} ${event.outcome} '
-        'stake=\$${event.stakeUsd.toStringAsFixed(2)} '
-        'win=\$${event.winAmountUsd.toStringAsFixed(2)} '
-        'payout=\$${event.payoutUsd.toStringAsFixed(2)} '
-        'contract=${event.derivContractId ?? 'N/A'}',
+            'stake=\$${event.stakeUsd.toStringAsFixed(2)} '
+            'win=\$${event.winAmountUsd.toStringAsFixed(2)} '
+            'payout=\$${event.payoutUsd.toStringAsFixed(2)} '
+            'contract=${event.derivContractId ?? 'N/A'}',
       );
     } else if (event is GameBetAccepted) {
       _applyGameBalance(event.newBalance);
       AppLogger.instance.log(
         'game',
         'Bet accepted session=${event.sessionId} '
-        'stake=\$${event.stakeUsd.toStringAsFixed(2)} '
-        'newBalance=\$${event.newBalance.toStringAsFixed(2)}',
+            'stake=\$${event.stakeUsd.toStringAsFixed(2)} '
+            'newBalance=\$${event.newBalance.toStringAsFixed(2)}',
       );
     } else if (event is GameBetRejected) {
       AppLogger.instance.log(
@@ -199,20 +215,9 @@ class SessionManager extends ChangeNotifier {
     await prefs.setBool(_rememberMeKey, value);
     if (!value) {
       await _secureStorage.delete(key: _sessionKey);
+      await prefs.remove(_legacyRememberedEmailKey);
     } else {
       await _persistSessionIfNeeded();
-    }
-    notifyListeners();
-  }
-
-  Future<void> rememberEmail(String? email) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (email == null || email.isEmpty) {
-      await prefs.remove(_rememberedEmailKey);
-      _rememberedEmail = null;
-    } else {
-      await prefs.setString(_rememberedEmailKey, email);
-      _rememberedEmail = email;
     }
     notifyListeners();
   }
@@ -220,7 +225,6 @@ class SessionManager extends ChangeNotifier {
   Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     _rememberMe = prefs.getBool(_rememberMeKey) ?? false;
-    _rememberedEmail = prefs.getString(_rememberedEmailKey);
     if (_rememberMe) {
       await _restoreSession();
     }
@@ -258,13 +262,11 @@ class SessionManager extends ChangeNotifier {
       await _secureStorage.delete(key: _sessionKey);
       return;
     }
-    final payload = jsonEncode(
-      {
-        'accessToken': _session!.accessToken,
-        'refreshToken': _session!.refreshToken,
-        'user': _session!.user,
-      },
-    );
+    final payload = jsonEncode({
+      'accessToken': _session!.accessToken,
+      'refreshToken': _session!.refreshToken,
+      'user': _session!.user,
+    });
     await _secureStorage.write(key: _sessionKey, value: payload);
   }
 

@@ -2,17 +2,17 @@
 
 GameHub is the main repository for **Glory Grid**, a Flutter app backed by a Go-based game and wallet platform. The project combines:
 
-- a Flutter mobile client in `game_trader_app/`
+- a Flutter client for mobile and web in `game_trader_app/`
 - a multi-service backend in `apis/`
 - supporting product, marketing, and strategy docs in the repo root
 
 ## What Is In This Repo
 
-### Mobile app
+### App clients
 
 The Flutter app includes:
 
-- email auth and session handling
+- Firebase Auth with Google, Apple, and X SSO (plus anonymous guest mode)
 - wallet and ledger views
 - deposit and withdrawal flows
 - trading-game screens
@@ -96,11 +96,13 @@ Useful commands:
 - `make down` - stop the backend
 - `make clean` - remove the backend container and Redis volume
 
-### 2. Run the Flutter app
+### 2. Run the Flutter app (mobile)
 
 ```bash
 cd game_trader_app
 flutter pub get
+dart pub global activate flutterfire_cli
+flutterfire configure --project=glory-grid-b90a3
 flutter run --dart-define=GAMEHUB_BASE_URL=http://127.0.0.1
 ```
 
@@ -111,6 +113,35 @@ http://127.0.0.1
 ```
 
 For a physical device, pass a base URL the phone can actually reach, such as a LAN IP or tunnel URL.
+
+### 3. Run the Flutter web app
+
+```bash
+cd game_trader_app
+flutter run -d chrome \
+  --web-hostname localhost \
+  --web-port 7357 \
+  --dart-define=GAMEHUB_BASE_URL=http://127.0.0.1
+```
+
+### 4. Run the web app via Docker (prebuilt artifact)
+
+If you prefer to build once and serve that exact build artifact:
+
+```bash
+cd game_trader_app
+flutter build web --release --dart-define=GAMEHUB_BASE_URL=http://127.0.0.1
+docker build --target prebuilt -t gamehub-web .
+docker run --rm -p 8080:80 gamehub-web
+```
+
+Then open `http://localhost:8080`.
+
+For Firebase token verification in auth-service, set:
+
+```text
+FIREBASE_PROJECT_ID=<your_firebase_project_id>
+```
 
 ## Mobile Build Commands
 

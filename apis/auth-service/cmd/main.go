@@ -4,22 +4,30 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/subtle"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -39,7 +47,10 @@ var (
 	jwtManager *token.Manager
 	mailClient *mailer.Client
 
-	usernameSanitizer = regexp.MustCompile(`[^a-z0-9]+`)
+	usernameSanitizer  = regexp.MustCompile(`[^a-z0-9]+`)
+	googleHTTPClient   = &http.Client{Timeout: 10 * time.Second}
+	firebaseHTTPClient = &http.Client{Timeout: 10 * time.Second}
+	firebaseCertCache  = &firebasePublicKeyCache{}
 )
 
 const (
@@ -48,6 +59,9 @@ const (
 	argonMemory  uint32 = 64 * 1024
 	argonThreads uint8  = 4
 	argonKeyLen  uint32 = 32
+
+	firebasePublicKeysEndpoint = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+	defaultFirebaseCertTTL     = 60 * time.Minute
 )
 
 type ctxKey string
@@ -57,6 +71,12 @@ const ctxUserKey ctxKey = "auth_user"
 type refreshSession struct {
 	UserID string `json:"userId"`
 	Role   string `json:"role"`
+}
+
+type firebasePublicKeyCache struct {
+	mu        sync.RWMutex
+	keys      map[string]*rsa.PublicKey
+	expiresAt time.Time
 }
 
 func main() {
@@ -107,6 +127,12 @@ func main() {
 	// Phone + OTP
 	registerRoute(mux, http.MethodPost, "/api/v1/auth/phone/request-otp", handleRequestOTP)
 	registerRoute(mux, http.MethodPost, "/api/v1/auth/phone/verify-otp", handleVerifyOTP)
+
+	// Firebase Auth token exchange
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/firebase/login", handleFirebaseLogin)
+
+	// Google Sign-In
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/google/login", handleGoogleLogin)
 
 	// Email + Password
 	registerRoute(mux, http.MethodPost, "/api/v1/auth/email/register", handleEmailRegister)
@@ -258,6 +284,165 @@ func handleVerifyOTP(w http.ResponseWriter, r *http.Request) {
 	triggerWalletGeneration(userID)
 
 	// Issue tokens
+	accessToken, refreshToken, err := issueTokenPair(ctx, userID, "user")
+	if err != nil {
+		respondError(w, 500, "failed to issue tokens")
+		return
+	}
+
+	respondJSON(w, 200, map[string]interface{}{
+		"accessToken":  accessToken,
+		"refreshToken": refreshToken,
+		"user":         sanitizeUser(user),
+	})
+}
+
+// ============================================================
+// FIREBASE AUTH
+// ============================================================
+
+type firebaseTokenClaims struct {
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
+	Firebase      struct {
+		SignInProvider string              `json:"sign_in_provider"`
+		Identities     map[string][]string `json:"identities"`
+	} `json:"firebase"`
+	jwt.RegisteredClaims
+}
+
+type firebaseIdentity struct {
+	UID          string
+	Email        string
+	FullName     string
+	AvatarURL    string
+	ProviderRaw  string
+	ProviderName string
+	IsGuest      bool
+}
+
+func handleFirebaseLogin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if strings.TrimSpace(cfg.FirebaseProjectID) == "" {
+		respondError(w, 503, "firebase auth is not configured")
+		return
+	}
+
+	var body struct {
+		IDToken string `json:"idToken"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, 400, "invalid request")
+		return
+	}
+	idToken := strings.TrimSpace(body.IDToken)
+	if idToken == "" {
+		respondError(w, 400, "idToken is required")
+		return
+	}
+
+	claims, err := verifyFirebaseIDToken(ctx, idToken)
+	if err != nil {
+		log.Printf("firebase token validation failed: %v", err)
+		respondError(w, 401, "invalid firebase identity token")
+		return
+	}
+
+	identity := firebaseIdentity{
+		UID:          strings.TrimSpace(claims.Subject),
+		Email:        strings.ToLower(strings.TrimSpace(claims.Email)),
+		FullName:     strings.TrimSpace(claims.Name),
+		AvatarURL:    strings.TrimSpace(claims.Picture),
+		ProviderRaw:  strings.TrimSpace(claims.Firebase.SignInProvider),
+		ProviderName: normalizeFirebaseProvider(claims.Firebase.SignInProvider),
+		IsGuest:      strings.EqualFold(strings.TrimSpace(claims.Firebase.SignInProvider), "anonymous"),
+	}
+
+	user, shouldProvisionWallets, role, err := upsertUserByFirebase(ctx, identity)
+	if err != nil {
+		respondError(w, 500, "failed to prepare user")
+		return
+	}
+	userID, err := extractUserID(user)
+	if err != nil {
+		respondError(w, 500, "user id missing")
+		return
+	}
+	if shouldProvisionWallets {
+		triggerWalletGeneration(userID)
+	}
+
+	accessToken, refreshToken, err := issueTokenPair(ctx, userID, role)
+	if err != nil {
+		respondError(w, 500, "failed to issue tokens")
+		return
+	}
+
+	respondJSON(w, 200, map[string]interface{}{
+		"accessToken":  accessToken,
+		"refreshToken": refreshToken,
+		"user":         sanitizeUser(user),
+	})
+}
+
+// ============================================================
+// GOOGLE SIGN-IN
+// ============================================================
+
+type googleTokenInfo struct {
+	Audience      string `json:"aud"`
+	Email         string `json:"email"`
+	EmailVerified string `json:"email_verified"`
+	ExpiresAtUnix string `json:"exp"`
+	Issuer        string `json:"iss"`
+	FullName      string `json:"name"`
+	AvatarURL     string `json:"picture"`
+	Subject       string `json:"sub"`
+}
+
+func handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if len(cfg.GoogleClientIDs) == 0 {
+		respondError(w, 503, "google sign-in is not configured")
+		return
+	}
+
+	var body struct {
+		IDToken string `json:"idToken"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		respondError(w, 400, "invalid request")
+		return
+	}
+	idToken := strings.TrimSpace(body.IDToken)
+	if idToken == "" {
+		respondError(w, 400, "idToken is required")
+		return
+	}
+
+	claims, err := verifyGoogleIDToken(ctx, idToken)
+	if err != nil {
+		log.Printf("google token validation failed: %v", err)
+		respondError(w, 401, "invalid google identity token")
+		return
+	}
+
+	user, shouldProvisionWallets, err := upsertUserByGoogle(ctx, claims)
+	if err != nil {
+		respondError(w, 500, "failed to prepare user")
+		return
+	}
+	userID, err := extractUserID(user)
+	if err != nil {
+		respondError(w, 500, "user id missing")
+		return
+	}
+	if shouldProvisionWallets {
+		triggerWalletGeneration(userID)
+	}
+
 	accessToken, refreshToken, err := issueTokenPair(ctx, userID, "user")
 	if err != nil {
 		respondError(w, 500, "failed to issue tokens")
@@ -499,6 +684,7 @@ func handleGuestStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID := res.InsertedID.(primitive.ObjectID).Hex()
+	triggerWalletGeneration(userID)
 	accessToken, refreshToken, err := issueTokenPair(ctx, userID, "guest")
 	if err != nil {
 		respondError(w, 500, "failed to issue tokens")
@@ -627,11 +813,483 @@ func handleKYCInitiate(w http.ResponseWriter, r *http.Request) {
 // HELPERS
 // ============================================================
 
+func verifyFirebaseIDToken(ctx context.Context, idToken string) (*firebaseTokenClaims, error) {
+	expectedIssuer := "https://securetoken.google.com/" + strings.TrimSpace(cfg.FirebaseProjectID)
+	claims := &firebaseTokenClaims{}
+	parsed, err := jwt.ParseWithClaims(
+		idToken,
+		claims,
+		func(token *jwt.Token) (interface{}, error) {
+			if token.Method.Alg() != jwt.SigningMethodRS256.Alg() {
+				return nil, fmt.Errorf("firebase token uses unsupported alg %q", token.Method.Alg())
+			}
+			kid, _ := token.Header["kid"].(string)
+			kid = strings.TrimSpace(kid)
+			if kid == "" {
+				return nil, errors.New("firebase token missing kid header")
+			}
+			key, err := getFirebasePublicKey(ctx, kid, false)
+			if err == nil {
+				return key, nil
+			}
+			return getFirebasePublicKey(ctx, kid, true)
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()}),
+		jwt.WithIssuer(expectedIssuer),
+		jwt.WithAudience(strings.TrimSpace(cfg.FirebaseProjectID)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !parsed.Valid {
+		return nil, errors.New("firebase token is invalid")
+	}
+	if strings.TrimSpace(claims.Subject) == "" {
+		return nil, errors.New("firebase token subject is missing")
+	}
+	return claims, nil
+}
+
+func getFirebasePublicKey(ctx context.Context, kid string, forceRefresh bool) (*rsa.PublicKey, error) {
+	keys, err := loadFirebasePublicKeys(ctx, forceRefresh)
+	if err != nil {
+		return nil, err
+	}
+	key, ok := keys[kid]
+	if !ok || key == nil {
+		return nil, fmt.Errorf("firebase public key for kid %q not found", kid)
+	}
+	return key, nil
+}
+
+func loadFirebasePublicKeys(ctx context.Context, forceRefresh bool) (map[string]*rsa.PublicKey, error) {
+	now := time.Now()
+	firebaseCertCache.mu.RLock()
+	if !forceRefresh && len(firebaseCertCache.keys) > 0 && now.Before(firebaseCertCache.expiresAt) {
+		keys := cloneFirebasePublicKeys(firebaseCertCache.keys)
+		firebaseCertCache.mu.RUnlock()
+		return keys, nil
+	}
+	firebaseCertCache.mu.RUnlock()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, firebasePublicKeysEndpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := firebaseHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return nil, fmt.Errorf(
+			"firebase public key endpoint returned %d: %s",
+			resp.StatusCode,
+			strings.TrimSpace(string(body)),
+		)
+	}
+
+	var certs map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&certs); err != nil {
+		return nil, err
+	}
+	parsed := make(map[string]*rsa.PublicKey, len(certs))
+	for kid, certPEM := range certs {
+		publicKey, err := parseRSAPublicKeyFromCertificate(certPEM)
+		if err != nil {
+			log.Printf("firebase cert parse failed for kid %s: %v", kid, err)
+			continue
+		}
+		parsed[kid] = publicKey
+	}
+	if len(parsed) == 0 {
+		return nil, errors.New("firebase public keys payload contained no valid certificates")
+	}
+
+	ttl := parseMaxAge(resp.Header.Get("Cache-Control"), defaultFirebaseCertTTL)
+
+	firebaseCertCache.mu.Lock()
+	firebaseCertCache.keys = parsed
+	firebaseCertCache.expiresAt = now.Add(ttl)
+	keys := cloneFirebasePublicKeys(parsed)
+	firebaseCertCache.mu.Unlock()
+
+	return keys, nil
+}
+
+func cloneFirebasePublicKeys(src map[string]*rsa.PublicKey) map[string]*rsa.PublicKey {
+	out := make(map[string]*rsa.PublicKey, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+func parseRSAPublicKeyFromCertificate(certPEM string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(certPEM))
+	if block == nil {
+		return nil, errors.New("could not decode PEM certificate")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	key, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("certificate public key is not RSA")
+	}
+	return key, nil
+}
+
+func parseMaxAge(cacheControl string, fallback time.Duration) time.Duration {
+	for _, token := range strings.Split(cacheControl, ",") {
+		part := strings.TrimSpace(token)
+		if !strings.HasPrefix(strings.ToLower(part), "max-age=") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(part), "max-age="))
+		seconds, err := strconv.Atoi(value)
+		if err != nil || seconds <= 0 {
+			break
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	return fallback
+}
+
+func normalizeFirebaseProvider(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "google.com":
+		return "google"
+	case "apple.com":
+		return "apple"
+	case "twitter.com":
+		return "x"
+	case "anonymous":
+		return "guest"
+	case "":
+		return "firebase"
+	default:
+		normalized := strings.ToLower(strings.TrimSpace(provider))
+		normalized = strings.TrimSuffix(normalized, ".com")
+		normalized = strings.ReplaceAll(normalized, ".", "-")
+		if normalized == "" {
+			return "firebase"
+		}
+		return normalized
+	}
+}
+
+func upsertUserByFirebase(ctx context.Context, identity firebaseIdentity) (bson.M, bool, string, error) {
+	now := time.Now()
+	existing, err := findUserForFirebase(ctx, identity.UID, identity.Email)
+	if err != nil {
+		return nil, false, "", err
+	}
+	guestExpiry := now.Add(24 * time.Hour)
+
+	if existing == nil {
+		doc := bson.M{
+			"firebaseUid": identity.UID,
+			"username": deriveUsername(
+				identity.FullName,
+				identity.Email,
+				identity.ProviderName,
+			),
+			"isGuest":   identity.IsGuest,
+			"kycStatus": "NONE",
+			"tier":      "BRONZE",
+			"createdAt": now,
+			"updatedAt": now,
+		}
+		authProviders := []string{"firebase"}
+		if identity.ProviderName != "" {
+			authProviders = append(authProviders, identity.ProviderName)
+		}
+		doc["authProviders"] = authProviders
+		if identity.Email != "" {
+			doc["email"] = identity.Email
+		}
+		if identity.FullName != "" {
+			doc["fullName"] = identity.FullName
+		}
+		if identity.AvatarURL != "" {
+			doc["avatarUrl"] = identity.AvatarURL
+		}
+		if identity.IsGuest {
+			doc["expiresAt"] = guestExpiry
+		}
+		res, err := db.Collection("users").InsertOne(ctx, doc)
+		if err != nil {
+			return nil, false, "", err
+		}
+		doc["_id"] = res.InsertedID
+		role := "user"
+		if identity.IsGuest {
+			role = "guest"
+		}
+		return doc, true, role, nil
+	}
+
+	setFields := bson.M{
+		"firebaseUid": identity.UID,
+		"updatedAt":   now,
+	}
+	if identity.Email != "" {
+		setFields["email"] = identity.Email
+	}
+	if identity.FullName != "" {
+		setFields["fullName"] = identity.FullName
+	}
+	if identity.AvatarURL != "" {
+		setFields["avatarUrl"] = identity.AvatarURL
+	}
+	username, _ := existing["username"].(string)
+	if strings.TrimSpace(username) == "" {
+		setFields["username"] = deriveUsername(
+			identity.FullName,
+			identity.Email,
+			identity.ProviderName,
+		)
+	}
+
+	update := bson.M{
+		"$set":      setFields,
+		"$addToSet": bson.M{"authProviders": bson.M{"$each": []string{"firebase", identity.ProviderName}}},
+	}
+	if identity.IsGuest {
+		update["$set"].(bson.M)["isGuest"] = true
+		update["$set"].(bson.M)["expiresAt"] = guestExpiry
+	} else {
+		update["$set"].(bson.M)["isGuest"] = false
+		update["$unset"] = bson.M{"expiresAt": ""}
+	}
+	if identity.ProviderName == "" {
+		update["$addToSet"] = bson.M{"authProviders": "firebase"}
+	}
+
+	_, err = db.Collection("users").UpdateOne(ctx, bson.M{"_id": existing["_id"]}, update)
+	if err != nil {
+		return nil, false, "", err
+	}
+
+	var updated bson.M
+	if err := db.Collection("users").FindOne(ctx, bson.M{"_id": existing["_id"]}).Decode(&updated); err != nil {
+		return nil, false, "", err
+	}
+
+	role := "user"
+	if updatedGuest, ok := updated["isGuest"].(bool); ok && updatedGuest {
+		role = "guest"
+	}
+	return updated, false, role, nil
+}
+
+func findUserForFirebase(ctx context.Context, firebaseUID, email string) (bson.M, error) {
+	users := db.Collection("users")
+	if firebaseUID != "" {
+		var user bson.M
+		err := users.FindOne(ctx, bson.M{"firebaseUid": firebaseUID}).Decode(&user)
+		if err == nil {
+			return user, nil
+		}
+		if err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	}
+	if email != "" {
+		var user bson.M
+		err := users.FindOne(ctx, bson.M{"email": email}).Decode(&user)
+		if err == nil {
+			return user, nil
+		}
+		if err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
+
+func verifyGoogleIDToken(ctx context.Context, idToken string) (*googleTokenInfo, error) {
+	endpoint := "https://oauth2.googleapis.com/tokeninfo?id_token=" + url.QueryEscape(idToken)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := googleHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return nil, fmt.Errorf("google tokeninfo returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var claims googleTokenInfo
+	if err := json.NewDecoder(resp.Body).Decode(&claims); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(claims.Subject) == "" {
+		return nil, errors.New("google subject claim missing")
+	}
+	if !isAllowedGoogleAudience(claims.Audience, cfg.GoogleClientIDs) {
+		return nil, errors.New("google audience mismatch")
+	}
+	if !isAllowedGoogleIssuer(claims.Issuer) {
+		return nil, errors.New("google issuer mismatch")
+	}
+	if strings.TrimSpace(claims.Email) != "" && !googleBool(claims.EmailVerified) {
+		return nil, errors.New("google email is not verified")
+	}
+	if claims.ExpiresAtUnix != "" {
+		expiresAt, err := strconv.ParseInt(strings.TrimSpace(claims.ExpiresAtUnix), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("google exp claim is invalid: %w", err)
+		}
+		if time.Now().Unix() >= expiresAt {
+			return nil, errors.New("google token expired")
+		}
+	}
+
+	claims.Email = strings.ToLower(strings.TrimSpace(claims.Email))
+	claims.FullName = strings.TrimSpace(claims.FullName)
+	claims.AvatarURL = strings.TrimSpace(claims.AvatarURL)
+	claims.Subject = strings.TrimSpace(claims.Subject)
+	return &claims, nil
+}
+
+func isAllowedGoogleAudience(audience string, allowed []string) bool {
+	audience = strings.TrimSpace(audience)
+	if audience == "" {
+		return false
+	}
+	for _, candidate := range allowed {
+		if strings.EqualFold(audience, strings.TrimSpace(candidate)) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAllowedGoogleIssuer(issuer string) bool {
+	issuer = strings.TrimSpace(issuer)
+	return issuer == "" || issuer == "accounts.google.com" || issuer == "https://accounts.google.com"
+}
+
+func googleBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "1", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+func upsertUserByGoogle(ctx context.Context, claims *googleTokenInfo) (bson.M, bool, error) {
+	now := time.Now()
+	existing, err := findUserForGoogle(ctx, claims.Subject, claims.Email)
+	if err != nil {
+		return nil, false, err
+	}
+	if existing == nil {
+		doc := bson.M{
+			"googleId":      claims.Subject,
+			"username":      deriveUsername(claims.FullName, claims.Email, "google"),
+			"authProviders": []string{"google"},
+			"isGuest":       false,
+			"kycStatus":     "NONE",
+			"tier":          "BRONZE",
+			"createdAt":     now,
+			"updatedAt":     now,
+		}
+		if claims.FullName != "" {
+			doc["fullName"] = claims.FullName
+		}
+		if claims.Email != "" {
+			doc["email"] = claims.Email
+		}
+		if claims.AvatarURL != "" {
+			doc["avatarUrl"] = claims.AvatarURL
+		}
+		res, err := db.Collection("users").InsertOne(ctx, doc)
+		if err != nil {
+			return nil, false, err
+		}
+		doc["_id"] = res.InsertedID
+		return doc, true, nil
+	}
+
+	wasGuest, _ := existing["isGuest"].(bool)
+	setFields := bson.M{
+		"googleId":  claims.Subject,
+		"isGuest":   false,
+		"updatedAt": now,
+	}
+	if claims.Email != "" {
+		setFields["email"] = claims.Email
+	}
+	if claims.FullName != "" {
+		setFields["fullName"] = claims.FullName
+	}
+	if claims.AvatarURL != "" {
+		setFields["avatarUrl"] = claims.AvatarURL
+	}
+	username, _ := existing["username"].(string)
+	if strings.TrimSpace(username) == "" {
+		setFields["username"] = deriveUsername(claims.FullName, claims.Email, "google")
+	}
+
+	_, err = db.Collection("users").UpdateOne(ctx, bson.M{"_id": existing["_id"]}, bson.M{
+		"$set":      setFields,
+		"$addToSet": bson.M{"authProviders": "google"},
+		"$unset":    bson.M{"expiresAt": ""},
+	})
+	if err != nil {
+		return nil, false, err
+	}
+
+	var updated bson.M
+	if err := db.Collection("users").FindOne(ctx, bson.M{"_id": existing["_id"]}).Decode(&updated); err != nil {
+		return nil, false, err
+	}
+	return updated, wasGuest, nil
+}
+
+func findUserForGoogle(ctx context.Context, googleID, email string) (bson.M, error) {
+	users := db.Collection("users")
+	if googleID != "" {
+		var user bson.M
+		err := users.FindOne(ctx, bson.M{"googleId": googleID}).Decode(&user)
+		if err == nil {
+			return user, nil
+		}
+		if err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	}
+	if email != "" {
+		var user bson.M
+		err := users.FindOne(ctx, bson.M{"email": email}).Decode(&user)
+		if err == nil {
+			return user, nil
+		}
+		if err != mongo.ErrNoDocuments {
+			return nil, err
+		}
+	}
+	return nil, nil
+}
+
 func setupIndexes() {
 	ctx := context.Background()
 	db.Collection("users").Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{Keys: bson.D{{Key: "phone", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
 		{Keys: bson.D{{Key: "email", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
+		{Keys: bson.D{{Key: "firebaseUid", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
 		{Keys: bson.D{{Key: "googleId", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
 		{Keys: bson.D{{Key: "facebookId", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},
 		{Keys: bson.D{{Key: "appleId", Value: 1}}, Options: options.Index().SetUnique(true).SetSparse(true)},

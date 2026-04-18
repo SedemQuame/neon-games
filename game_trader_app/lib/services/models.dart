@@ -11,6 +11,14 @@ class AuthSession {
 
   String get userId => user['id']?.toString() ?? '';
   String get username => user['username']?.toString() ?? 'Pilot';
+  bool get isGuest => user['isGuest'] == true;
+  String get displayName {
+    final fullName = user['fullName']?.toString() ?? '';
+    if (fullName.isNotEmpty) {
+      return fullName;
+    }
+    return username;
+  }
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     return AuthSession(

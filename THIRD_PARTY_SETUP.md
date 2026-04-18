@@ -1,6 +1,6 @@
 # Third-Party Service Setup Guide
 
-This document walks through the credentials, sandbox programs, and local configuration that Glory Grid’s backend expects for each external dependency. Copy `apis/example.env` to `apis/.env` and fill in the variables referenced in each section.
+This document walks through the credentials, sandbox programs, and local configuration that Glory Grid’s backend expects for each external dependency. Copy `apis/.env.example` to `apis/.env` and fill in the variables referenced in each section.
 
 ---
 
@@ -40,48 +40,51 @@ Restart the services after updating `.env`:
 
 ---
 
-## 2. Social Login (Passport.js)
+## 2. Social Login (Firebase Auth)
 
-The `passport-auth` Node service handles the interactive OAuth flows for Google, Facebook, and Apple, then calls the Go Auth Service to mint JWTs. Configure the provider credentials plus callback URLs in `.env` (or your secret manager) before exposing any login buttons.
+Glory Grid now uses Firebase Authentication for SSO and guest sessions. Flutter signs users in with Firebase providers (Google, Apple, X), then sends the Firebase ID token to `POST /api/v1/auth/firebase/login` so the Go auth-service can issue GameHub JWTs.
 
-### 2.1 Google OAuth
-1. Create a project in the [Google Cloud Console](https://console.cloud.google.com/).
-2. Under **APIs & Services → Credentials → Create Credentials → OAuth client ID**, choose **Web application**.
-3. Add your frontend URL(s) to **Authorized JavaScript origins** (e.g. `https://app.gamehub.io`).
-4. Add the passport gateway callback (e.g. `https://api.gamehub.io/auth/google/callback`) to **Authorized redirect URIs**.
-5. Copy the generated **Client ID** and **Client Secret** into `.env`:
-   ```
-   GOOGLE_CLIENT_ID=...
-   GOOGLE_CLIENT_SECRET=...
-   GOOGLE_CALLBACK_URL=https://api.gamehub.io/auth/google/callback
-   ```
+### 2.1 Firebase Project
+1. Create a Firebase project at [Firebase Console](https://console.firebase.google.com/).
+2. In **Authentication → Sign-in method**, enable:
+   - Google
+   - Apple
+   - X (Twitter)
+   - Anonymous (for guest mode)
+3. Register app clients (Web, Android, iOS) under the same Firebase project.
 
-### 2.2 Facebook OAuth
-1. Create a Facebook App in [Meta for Developers](https://developers.facebook.com/).
-2. Enable **Facebook Login → Web** and set the **Valid OAuth Redirect URI** to `https://api.gamehub.io/auth/facebook/callback` (or your ngrok URL in development).
-3. Copy the **App ID** and **App Secret** into `.env`:
-   ```
-   FACEBOOK_CLIENT_ID=...
-   FACEBOOK_CLIENT_SECRET=...
-   FACEBOOK_CALLBACK_URL=https://api.gamehub.io/auth/facebook/callback
-   ```
-
-### 2.3 Apple Sign-In
-1. In the [Apple Developer portal](https://developer.apple.com/account/), create a **Services ID** (e.g. `com.gamehub.passport`).
-2. Create a **Sign in with Apple** key and download the `.p8` private key once.
-3. Collect **Team ID**, **Key ID**, **Client ID (Services ID)**, and either:
-   - Mount the `.p8` into the container and point `APPLE_PRIVATE_KEY_PATH` to it, **or**
-   - Paste the PEM contents into `APPLE_AUTH_PRIVATE_KEY` (newlines as `\n`).
-4. Set `APPLE_CALLBACK_URL` (e.g. `https://api.gamehub.io/auth/apple/callback`).
-
-### 2.4 Passport Auth Gateway Settings
+### 2.2 Backend Verification
+Set the Firebase project ID in `apis/.env` so auth-service can verify Firebase tokens:
 ```
-PASSPORT_AUTH_PORT=8080
-PASSPORT_SESSION_SECRET=super_secret
-PASSPORT_ALLOWED_ORIGINS=https://app.gamehub.io,https://staging.gamehub.io
-AUTH_SERVICE_URL=http://auth-service:8001   # inside Docker network
+FIREBASE_PROJECT_ID=<your_firebase_project_id>
 ```
-Expose the `/auth/{provider}` routes via NGINX so the frontend can open `/auth/google?redirect_uri=<front-end-url>` etc. Successful logins will redirect back with `accessToken`, `refreshToken`, and a base64 user blob appended to the redirect URI.
+
+### 2.3 Flutter Client Configuration (FlutterFire CLI)
+From your Flutter app root (`game_trader_app/`), run:
+
+```bash
+dart pub global activate flutterfire_cli
+flutterfire configure --project=glory-grid-b90a3
+```
+
+This command:
+- registers Android, iOS, macOS, Windows, and Web apps in Firebase
+- generates `lib/firebase_options.dart`
+- writes native config files (`android/app/google-services.json`, `ios/Runner/GoogleService-Info.plist`, `macos/Runner/GoogleService-Info.plist`)
+
+After this setup, launch app builds normally and only pass your API base URL define:
+
+```bash
+flutter run --dart-define=GAMEHUB_BASE_URL=http://127.0.0.1
+```
+
+### 2.4 Provider-Specific Notes
+- Google:
+  - Add web origins in Google Cloud OAuth client settings (for local dev include `http://localhost` and your chosen Flutter web port).
+- Apple:
+  - Configure Apple Sign-In in Firebase using your Apple Developer credentials (Service ID, Team ID, Key ID, private key).
+- X:
+  - Configure the X Developer app credentials inside Firebase Authentication for the X provider.
 
 ## 3. Flutterwave (MoMo Deposits & Withdrawals)
 
@@ -223,7 +226,7 @@ Use `./setup.sh infra` to bring up Mongo, Redis, Vault, and NGINX without the Go
 ## 8. Verification Checklist
 
 1. **Deriv**: Run `./setup.sh logs trader-pool` and place a real bet from the Flutter app. You should see `[trace=...] contract=... outcome=...`.
-2. **Passport Auth**: Hit `/auth/google` (or Facebook/Apple) in the browser with a `redirect_uri`. Ensure you land back on the frontend with tokens set, and `/api/v1/auth/social/exchange` returns a user document in the auth-service logs.
+2. **Firebase Auth**: Sign in from the Flutter app using Google/Apple/X, then test guest mode. Confirm auth-service accepts the Firebase token at `POST /api/v1/auth/firebase/login` and returns GameHub access + refresh tokens.
 3. **Flutterwave**: Call `POST /api/v1/payments/momo/deposit` and confirm `/webhooks/payment/flutterwave` fires with the correct `verif-hash`.
 4. **Tatum**: Fire a test deposit webhook and confirm `/internal/ledger/credit` entries in `wallet-service`.
 5. **Vault**: `docker exec -it gamehub_vault vault status` → `Sealed false`.

@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
+import 'services/firebase_bootstrap.dart';
 import 'services/session_manager.dart';
-import 'screens/signup_screen.dart';
+import 'screens/auth_screen.dart';
 import 'screens/dashboard_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await FirebaseBootstrap.initialize();
   runApp(
     ChangeNotifierProvider(
       create: (_) => SessionManager(),
@@ -27,7 +30,7 @@ class GameTraderApp extends StatelessWidget {
           theme: AppTheme.darkTheme,
           home: session.isAuthenticated
               ? const DashboardScreen()
-              : const SignupScreen(),
+              : const AuthScreen(),
         );
       },
     );

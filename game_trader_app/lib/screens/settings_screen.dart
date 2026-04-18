@@ -6,9 +6,9 @@ import 'package:provider/provider.dart';
 import '../app_theme.dart';
 import '../services/session_manager.dart';
 import '../widgets/game_message.dart';
+import 'auth_screen.dart';
 import 'app_logs_screen.dart';
 import 'deposit_screen.dart';
-import 'signup_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -23,10 +23,7 @@ class SettingsScreen extends StatelessWidget {
         elevation: 0,
         title: const Text(
           'Settings',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
       body: ListView(
@@ -42,9 +39,9 @@ class SettingsScreen extends StatelessWidget {
               style: TextStyle(color: Colors.white),
             ),
             subtitle: Text(
-              session.rememberedEmail?.isNotEmpty == true
-                  ? 'Using ${session.rememberedEmail}'
-                  : 'Remembers your email on this device',
+              session.rememberMe
+                  ? 'Your session will be restored on this device'
+                  : 'Sign in again when you open the app',
               style: const TextStyle(color: Color(0xFF94a3b8)),
             ),
           ),
@@ -73,9 +70,9 @@ class SettingsScreen extends StatelessWidget {
             ),
             trailing: const Icon(Icons.list_alt, color: Colors.white54),
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AppLogsScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const AppLogsScreen()));
             },
           ),
           ListTile(
@@ -87,11 +84,14 @@ class SettingsScreen extends StatelessWidget {
               'Top up your arcade wallet',
               style: TextStyle(color: Color(0xFF94a3b8)),
             ),
-            trailing: const Icon(Icons.account_balance_wallet, color: Colors.white54),
+            trailing: const Icon(
+              Icons.account_balance_wallet,
+              color: Colors.white54,
+            ),
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const DepositScreen()),
-              );
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const DepositScreen()));
             },
           ),
           const SizedBox(height: 16),
@@ -99,9 +99,15 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             title: const Text(
               'Log out',
-              style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            trailing: const Icon(Icons.power_settings_new, color: Colors.redAccent),
+            trailing: const Icon(
+              Icons.power_settings_new,
+              color: Colors.redAccent,
+            ),
             onTap: () => _handleLogout(context),
           ),
         ],
@@ -112,12 +118,10 @@ class SettingsScreen extends StatelessWidget {
   void _handleRememberMe(BuildContext context, bool value) {
     final session = context.read<SessionManager>();
     unawaited(session.setRememberMe(value));
-    if (!value) {
-      unawaited(session.rememberEmail(null));
-      showGameMessage(context, 'Saved login cleared.');
-    } else {
-      showGameMessage(context, 'Remember me enabled. Login email will be saved.');
-    }
+    showGameMessage(
+      context,
+      value ? 'Stay signed in is enabled.' : 'Stay signed in is disabled.',
+    );
   }
 
   Future<void> _handleRefreshBalance(BuildContext context) async {
@@ -139,7 +143,7 @@ class SettingsScreen extends StatelessWidget {
     await session.logout();
     if (!context.mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SignupScreen()),
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
       (route) => false,
     );
   }

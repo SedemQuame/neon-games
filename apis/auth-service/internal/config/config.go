@@ -32,8 +32,12 @@ type Config struct {
 	OTPTTLMinutes         string
 
 	// Google & Apple OAuth
-	GoogleClientID string
-	AppleClientID  string
+	GoogleClientID  string
+	GoogleClientIDs []string
+	AppleClientID   string
+
+	// Firebase Auth
+	FirebaseProjectID string
 
 	// Internal service key (for calls to wallet-service, etc.)
 	InternalServiceKey string
@@ -71,8 +75,9 @@ func Load() *Config {
 		HubtelSMSFrom:         getEnv("HUBTEL_SMS_FROM", "Glory Grid"),
 		OTPTTLMinutes:         getEnv("OTP_TTL_MINUTES", "5"),
 
-		GoogleClientID: getEnv("GOOGLE_CLIENT_ID", ""),
-		AppleClientID:  getEnv("APPLE_CLIENT_ID", ""),
+		GoogleClientID:    getEnv("GOOGLE_CLIENT_ID", ""),
+		AppleClientID:     getEnv("APPLE_CLIENT_ID", ""),
+		FirebaseProjectID: getEnv("FIREBASE_PROJECT_ID", ""),
 
 		InternalServiceKey: getEnv("INTERNAL_SERVICE_KEY", "dev-internal-key"),
 
@@ -89,6 +94,7 @@ func Load() *Config {
 	cfg.AccessTTL = parseMinutes(cfg.AccessTTLMin, 15)
 	cfg.RefreshTTL = parseDays(cfg.RefreshTTLDays, 7)
 	cfg.PasswordResetTTL = parseMinutes(cfg.PasswordResetTTLMinutes, 30)
+	cfg.GoogleClientIDs = splitCSV(getEnv("GOOGLE_CLIENT_IDS", cfg.GoogleClientID))
 	return cfg
 }
 
@@ -180,4 +186,21 @@ func redisFromURL(raw string) (addr, password string, ok bool) {
 		password, _ = parsed.User.Password()
 	}
 	return addr, password, true
+}
+
+func splitCSV(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
 }
