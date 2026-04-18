@@ -125,34 +125,7 @@ func main() {
 	// CORS + JSON middleware wrapper
 	handler := loggingMiddleware(corsMiddleware(mux))
 
-	registerRoute(mux, http.MethodGet, "/health", handleHealth)
-
-	// Phone + OTP
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/phone/request-otp", handleRequestOTP)
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/phone/verify-otp", handleVerifyOTP)
-
-	// Firebase Auth token exchange
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/firebase/login", handleFirebaseLogin)
-
-	// Google Sign-In
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/google/login", handleGoogleLogin)
-
-	// Email + Password
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/email/register", handleEmailRegister)
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/email/login", handleEmailLogin)
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/email/forgot", handleEmailForgotPassword)
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/email/reset", handleEmailResetPassword)
-
-	// Guest
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/guest/start", handleGuestStart)
-
-	// Token management
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/refresh", handleRefreshToken)
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/logout", handleLogout)
-
-	// Profile (requires auth header)
-	registerRoute(mux, http.MethodGet, "/api/v1/auth/me", requireAuth(handleGetProfile))
-	registerRoute(mux, http.MethodPost, "/api/v1/auth/kyc/initiate", requireAuth(handleKYCInitiate))
+	registerRoutes(mux)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
@@ -181,6 +154,37 @@ func main() {
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, 200, map[string]string{"status": "ok", "service": "auth-service"})
+}
+
+func registerRoutes(mux *http.ServeMux) {
+	registerRoute(mux, http.MethodGet, "/health", handleHealth)
+
+	// Phone + OTP
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/phone/request-otp", handleRequestOTP)
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/phone/verify-otp", handleVerifyOTP)
+
+	// Firebase Auth token exchange
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/firebase/login", handleFirebaseLogin)
+
+	// Google Sign-In
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/google/login", handleGoogleLogin)
+
+	// Email + Password
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/email/register", handleEmailRegister)
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/email/login", handleEmailLogin)
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/email/forgot", handleEmailForgotPassword)
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/email/reset", handleEmailResetPassword)
+
+	// Guest
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/guest/start", handleGuestStart)
+
+	// Token management
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/refresh", handleRefreshToken)
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/logout", handleLogout)
+
+	// Profile (requires auth header)
+	registerRoute(mux, http.MethodGet, "/api/v1/auth/me", requireAuth(handleGetProfile))
+	registerRoute(mux, http.MethodPost, "/api/v1/auth/kyc/initiate", requireAuth(handleKYCInitiate))
 }
 
 // ============================================================
