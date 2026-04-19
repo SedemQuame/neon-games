@@ -137,6 +137,17 @@ docker run --rm -p 8080:80 gamehub-web
 
 Then open `http://localhost:8080`.
 
+## Git Hooks
+
+Install repository hooks once per clone:
+
+```bash
+./scripts/install-git-hooks.sh
+```
+
+This enables `.githooks/pre-push`, which builds the Flutter web app in
+`--release` mode before every push. The push is blocked if the build fails.
+
 For Firebase token verification in auth-service, set:
 
 ```text

@@ -58,37 +58,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
       body: Stack(
         children: [
           SafeArea(
             bottom: false,
-            child: Column(
-              children: [
-                _buildHeader(context, _balance, _loadingBalance),
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: _refreshBalance,
-                    child: ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.only(bottom: 120),
-                      children: [
-                        _buildPromoScroller(),
-                        _buildFilterChips(),
-                        _buildGamesGrid(context),
-                      ],
-                    ),
-                  ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: isDesktop ? 1320 : double.infinity,
                 ),
-              ],
+                child: Column(
+                  children: [
+                    _buildHeader(context, _balance, _loadingBalance),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _refreshBalance,
+                        child: ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: EdgeInsets.only(
+                            bottom: isDesktop ? 32 : 120,
+                          ),
+                          children: [
+                            _buildPromoSection(isDesktop),
+                            if (isDesktop) ...[
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
+                                child: _buildLiveFeed(),
+                              ),
+                            ],
+                            _buildFilterChips(),
+                            _buildGamesGrid(context),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
 
-          // Live Win Feed
-          Positioned(bottom: 96, left: 16, right: 16, child: _buildLiveFeed()),
+          if (!isDesktop)
+            Positioned(
+              bottom: 96,
+              left: 16,
+              right: 16,
+              child: _buildLiveFeed(),
+            ),
 
-          // Bottom Nav
           const Positioned(
             bottom: 0,
             left: 0,
@@ -172,31 +195,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPromoScroller() {
+  Widget _buildPromoSection(bool isDesktop) {
     final platformGradient = [AppTheme.primaryColor, const Color(0xFF0F2A47)];
     final supportGradient = [const Color(0xFF1C2430), AppTheme.surfaceDark];
+    final accountGradient = [const Color(0xFF233246), const Color(0xFF1A1F2C)];
+
+    final cards = [
+      _buildPromoCard(
+        title: 'Platform Highlights',
+        subtitle: 'Discover featured games and quick actions',
+        badgeText: 'FEATURED',
+        colors: platformGradient,
+        icon: Icons.dashboard_customize,
+      ),
+      _buildPromoCard(
+        title: 'Account Security',
+        subtitle: 'Protected access with Firebase authentication',
+        badgeText: 'SECURE',
+        colors: supportGradient,
+        icon: Icons.shield_outlined,
+      ),
+      _buildPromoCard(
+        title: 'Wallet Access',
+        subtitle: 'Deposit funds and track balance updates instantly',
+        badgeText: 'FINANCE',
+        colors: accountGradient,
+        icon: Icons.account_balance_wallet_outlined,
+      ),
+    ];
+
+    if (isDesktop) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          children: [
+            Expanded(child: cards[0]),
+            const SizedBox(width: 12),
+            Expanded(child: cards[1]),
+            const SizedBox(width: 12),
+            Expanded(child: cards[2]),
+          ],
+        ),
+      );
+    }
+
     return SizedBox(
       height: 144,
-      child: ListView(
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        children: [
-          _buildPromoCard(
-            title: 'Platform Highlights',
-            subtitle: 'Discover featured games and quick actions',
-            badgeText: 'FEATURED',
-            colors: platformGradient,
-            icon: Icons.dashboard_customize,
-          ),
-          const SizedBox(width: 12),
-          _buildPromoCard(
-            title: 'Account Security',
-            subtitle: 'Protected access with Firebase authentication',
-            badgeText: 'SECURE',
-            colors: supportGradient,
-            icon: Icons.shield_outlined,
-          ),
-        ],
+        itemBuilder: (context, index) =>
+            SizedBox(width: 288, child: cards[index]),
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        itemCount: cards.length,
       ),
     );
   }
@@ -209,7 +260,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required IconData icon,
   }) {
     return Container(
-      width: 288,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         gradient: LinearGradient(
