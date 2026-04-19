@@ -143,7 +143,7 @@ class _WalletScreenState extends State<WalletScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'TRADER PRO',
+                    'GLORY MEMBER',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
@@ -253,61 +253,6 @@ class _WalletScreenState extends State<WalletScreen> {
               style: const TextStyle(fontSize: 11, color: Color(0xFF94a3b8)),
             ),
           ],
-          const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              children: [
-                const Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'TIER: GOLD TRADER',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF94a3b8),
-                      ),
-                    ),
-                    Text(
-                      '85% to Platinum',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        fontStyle: FontStyle.italic,
-                        color: AppTheme.primaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  height: 6,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1e293b),
-                    borderRadius: BorderRadius.circular(9999),
-                  ),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: 0.85,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor,
-                        borderRadius: BorderRadius.circular(9999),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryColor.withValues(alpha: 0.6),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );
@@ -438,13 +383,6 @@ class _WalletScreenState extends State<WalletScreen> {
                   title: 'Crypto',
                   subtitle: 'BTC, ETH, USDT',
                 ),
-              ),
-              const SizedBox(width: 16),
-              _buildPaymentCard(
-                icon: Icons.credit_card,
-                color: Colors.blue,
-                title: 'Cards',
-                subtitle: 'Visa, Mastercard',
               ),
               const SizedBox(width: 16),
               _buildPaymentCard(

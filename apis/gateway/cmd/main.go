@@ -26,10 +26,16 @@ type route struct {
 	upstream *upstream
 }
 
+type corsPolicy struct {
+	allowAll bool
+	origins  map[string]struct{}
+}
+
 func main() {
 	log.SetOutput(os.Stdout)
 
 	gatewayPort := env("GATEWAY_PORT", "80")
+	cors := parseCORSPolicy(env("CORS_ALLOWED_ORIGINS", "*"))
 
 	upstreams := []*upstream{
 		newUpstream("auth-service", "http://127.0.0.1:"+env("AUTH_SERVICE_PORT", "8001")),
@@ -130,7 +136,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + gatewayPort,
-		Handler:           loggingMiddleware(mux),
+		Handler:           loggingMiddleware(corsMiddleware(mux, cors)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -202,6 +208,109 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 		log.Printf("%s %s (%s)", r.Method, r.URL.Path, time.Since(start))
 	})
+}
+
+func corsMiddleware(next http.Handler, policy corsPolicy) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if skipGatewayCORSForPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin != "" {
+			allowedOrigin := ""
+			if policy.allowAll {
+				allowedOrigin = "*"
+			} else if policy.isAllowed(origin) {
+				allowedOrigin = origin
+			}
+			if allowedOrigin == "" {
+				writeJSON(w, http.StatusForbidden, map[string]string{
+					"error": "origin not allowed",
+				})
+				return
+			}
+
+			appendVaryHeader(w, "Origin")
+			appendVaryHeader(w, "Access-Control-Request-Method")
+			appendVaryHeader(w, "Access-Control-Request-Headers")
+			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Internal-Key")
+			w.Header().Set("Access-Control-Max-Age", "600")
+		}
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func skipGatewayCORSForPath(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/auth/")
+}
+
+func parseCORSPolicy(raw string) corsPolicy {
+	policy := corsPolicy{
+		origins: make(map[string]struct{}),
+	}
+	for _, candidate := range strings.Split(raw, ",") {
+		normalized := normalizeOrigin(candidate)
+		if normalized == "" {
+			continue
+		}
+		if normalized == "*" {
+			policy.allowAll = true
+			policy.origins = map[string]struct{}{}
+			return policy
+		}
+		policy.origins[normalized] = struct{}{}
+	}
+	if len(policy.origins) == 0 {
+		policy.allowAll = true
+	}
+	return policy
+}
+
+func (p corsPolicy) isAllowed(origin string) bool {
+	if p.allowAll {
+		return true
+	}
+	_, ok := p.origins[normalizeOrigin(origin)]
+	return ok
+}
+
+func normalizeOrigin(origin string) string {
+	trimmed := strings.TrimSpace(origin)
+	if trimmed == "" {
+		return ""
+	}
+	if trimmed == "*" {
+		return "*"
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return strings.ToLower(trimmed)
+	}
+	return strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
+}
+
+func appendVaryHeader(w http.ResponseWriter, value string) {
+	existing := w.Header().Get("Vary")
+	if existing == "" {
+		w.Header().Set("Vary", value)
+		return
+	}
+	for _, part := range strings.Split(existing, ",") {
+		if strings.EqualFold(strings.TrimSpace(part), value) {
+			return
+		}
+	}
+	w.Header().Set("Vary", existing+", "+value)
 }
 
 func env(key, fallback string) string {

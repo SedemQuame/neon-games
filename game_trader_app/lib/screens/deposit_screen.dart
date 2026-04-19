@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import 'crypto_deposit_screen.dart';
-import 'mobile_money_deposit_screen.dart';
 
 class DepositScreen extends StatelessWidget {
   const DepositScreen({super.key});
@@ -32,7 +31,7 @@ class DepositScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Choose how you want to fund your arcade wallet. Transactions are fast and secure.',
+                    'Cryptocurrency deposits are currently available for wallet funding.',
                     style: TextStyle(color: Color(0xFF94a3b8), fontSize: 14),
                   ),
                   const SizedBox(height: 32),
@@ -50,35 +49,6 @@ class DepositScreen extends StatelessWidget {
                         ),
                       );
                     },
-                  ),
-                  const SizedBox(height: 16),
-                  _buildMethodCard(
-                    context,
-                    title: 'Mobile Money',
-                    subtitle: 'Deposit via MTN, Vodafone, or AirtelTigo',
-                    icon: Icons.phone_iphone,
-                    iconColor: Colors.greenAccent,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const MobileMoneyDepositScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _buildMethodCard(
-                    context,
-                    title: 'Credit / Debit Card',
-                    subtitle: 'Visa, Mastercard supported',
-                    icon: Icons.credit_card,
-                    iconColor: Colors.blueAccent,
-                    onTap: () {
-                      // Placeholder for future Card deposit implementation
-                    },
-                    isComingSoon: true,
                   ),
                 ],
               ),

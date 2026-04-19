@@ -23,7 +23,7 @@ class TradesScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 const Center(
                   child: Text(
-                    'YOUR TRADES',
+                    'YOUR ACTIVITY',
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w900,
@@ -34,7 +34,7 @@ class TradesScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Trade portfolio coming soon.',
+                  'Performance insights coming soon.',
                   style: TextStyle(color: Color(0xFF94a3b8), fontSize: 14),
                 ),
               ],

@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 import 'app_theme.dart';
 import 'services/firebase_bootstrap.dart';
 import 'services/session_manager.dart';
-import 'screens/auth_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/unauthenticated_home.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,11 +26,11 @@ class GameTraderApp extends StatelessWidget {
     return Consumer<SessionManager>(
       builder: (context, session, _) {
         return MaterialApp(
-          title: 'Gaming Trader App',
+          title: 'Glory Grid',
           theme: AppTheme.darkTheme,
           home: session.isAuthenticated
               ? const DashboardScreen()
-              : const AuthScreen(),
+              : buildUnauthenticatedHome(),
         );
       },
     );

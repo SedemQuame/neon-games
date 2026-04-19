@@ -173,6 +173,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildPromoScroller() {
+    final platformGradient = [AppTheme.primaryColor, const Color(0xFF0F2A47)];
+    final supportGradient = [const Color(0xFF1C2430), AppTheme.surfaceDark];
     return SizedBox(
       height: 144,
       child: ListView(
@@ -180,19 +182,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
           _buildPromoCard(
-            title: 'Neon Master Series',
-            subtitle: 'Win your share of \$50,000',
-            badgeText: 'TOURNAMENT LIVE',
-            colors: [AppTheme.primaryColor, Colors.blue.shade600],
-            icon: Icons.emoji_events,
+            title: 'Platform Highlights',
+            subtitle: 'Discover featured games and quick actions',
+            badgeText: 'FEATURED',
+            colors: platformGradient,
+            icon: Icons.dashboard_customize,
           ),
           const SizedBox(width: 12),
           _buildPromoCard(
-            title: 'Daily Win Streak',
-            subtitle: '5 wins in a row = 20% bonus',
-            badgeText: 'BONUS',
-            colors: [Colors.purple.shade600, Colors.indigo.shade700],
-            icon: Icons.bolt,
+            title: 'Account Security',
+            subtitle: 'Protected access with Firebase authentication',
+            badgeText: 'SECURE',
+            colors: supportGradient,
+            icon: Icons.shield_outlined,
           ),
         ],
       ),
@@ -314,7 +316,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Featured Trading Games',
+                'Featured Games',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,

@@ -1,5 +1,5 @@
 # Glory Grid API — Deployment Notes
-> **Updated:** April 9, 2026
+> **Updated:** April 19, 2026
 
 ## Overview
 
@@ -121,3 +121,22 @@ docker run --rm \
 - MongoDB should point at Atlas or another managed replica set through `MONGO_URI`.
 - nginx is no longer part of the backend stack.
 - If you already terminate TLS at a platform edge or load balancer, forward traffic directly to the gateway port.
+
+## Production Release Checklist (Railway)
+
+Use this checklist for every auth-related release to avoid frontend/backend contract drift.
+
+1. Keep branch parity:
+   - `carefree-perfection` (web) and `neon-games` (backend) must both deploy from `main`.
+2. Confirm latest deployed commits before release:
+   - `cd game_trader_app && railway deployment list --limit 1 --json`
+   - `cd apis && railway deployment list --limit 1 --json`
+3. Deploy backend from the current `main` checkout:
+   - `cd apis`
+   - `railway deployment up --service neon-games --environment production --detach`
+4. Run post-deploy auth contract smoke checks:
+   - `cd /Users/sedemquame/Documents/Commercial/self/games/GameHub`
+   - `./scripts/smoke_auth_contract.sh https://neon-games-production.up.railway.app`
+5. Required result:
+   - `POST /api/v1/auth/firebase/login` returns `400` or `401` (never `404`)
+   - `POST /api/v1/auth/google/login` returns `400`, `401`, or `503` (never `404`)

@@ -61,7 +61,7 @@ class SharedBottomNav extends StatelessWidget {
               },
               child: _buildNavItem(
                 icon: Icons.auto_graph,
-                label: 'Trade',
+                label: 'Activity',
                 isActive: currentIndex == 1,
               ),
             ),
