@@ -31,6 +31,10 @@ type Manager struct {
 
 	mu          sync.RWMutex
 	subscribers map[string]map[chan []byte]struct{}
+
+	roomsMu   sync.RWMutex
+	rooms     map[string]*multiplayerRoom
+	userRooms map[string]string
 }
 
 type PlaceBetRequest struct {
@@ -67,6 +71,8 @@ func NewManager(db *mongo.Database, rdb *redis.Client, walletClient *wallet.Clie
 		wallet:      walletClient,
 		cfg:         cfg,
 		subscribers: make(map[string]map[chan []byte]struct{}),
+		rooms:       make(map[string]*multiplayerRoom),
+		userRooms:   make(map[string]string),
 	}
 }
 

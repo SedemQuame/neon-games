@@ -97,6 +97,12 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 		"userId":      userID,
 		"connectedAt": time.Now().UTC(),
 	})
+	if snapshot, ok := h.mgr.GetUserRoomSnapshot(userID); ok {
+		_ = conn.WriteJSON(fiber.Map{
+			"type":    "ROOM_STATE",
+			"payload": snapshot,
+		})
+	}
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -156,6 +162,109 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 				"newBalance": resp.NewBalance,
 				"traceId":    resp.TraceID,
 			})
+		case "CREATE_ROOM":
+			var req session.CreateRoomRequest
+			if err := json.Unmarshal(data, &req); err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": "bad create-room payload"})
+				continue
+			}
+			snapshot, err := h.mgr.CreateRoom(userID, req)
+			if err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
+				continue
+			}
+			conn.WriteJSON(fiber.Map{"type": "ROOM_CREATED", "payload": snapshot})
+			conn.WriteJSON(fiber.Map{"type": "ROOM_STATE", "payload": snapshot})
+		case "LIST_PUBLIC_ROOMS":
+			var req session.ListPublicRoomsRequest
+			_ = json.Unmarshal(data, &req)
+			items := h.mgr.ListPublicRooms(req)
+			conn.WriteJSON(fiber.Map{
+				"type":    "ROOM_LIST",
+				"payload": fiber.Map{"rooms": items},
+			})
+		case "JOIN_ROOM":
+			var req session.JoinRoomRequest
+			if err := json.Unmarshal(data, &req); err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": "bad join payload"})
+				continue
+			}
+			snapshot, err := h.mgr.JoinRoom(userID, req)
+			if err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
+				continue
+			}
+			conn.WriteJSON(fiber.Map{"type": "ROOM_STATE", "payload": snapshot})
+		case "LEAVE_ROOM":
+			snapshot, err := h.mgr.LeaveRoom(userID)
+			if err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
+				continue
+			}
+			if snapshot == nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_LEFT"})
+			} else {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_STATE", "payload": snapshot})
+			}
+		case "SET_ROOM_READY":
+			var req session.SetRoomReadyRequest
+			if err := json.Unmarshal(data, &req); err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": "bad ready payload"})
+				continue
+			}
+			snapshot, err := h.mgr.SetRoomReady(userID, req)
+			if err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
+				continue
+			}
+			conn.WriteJSON(fiber.Map{"type": "ROOM_STATE", "payload": snapshot})
+		case "START_ROOM_ROUND":
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			payload, err := h.mgr.StartRoomRound(ctx, userID)
+			cancel()
+			if err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
+				continue
+			}
+			conn.WriteJSON(fiber.Map{"type": "ROOM_ROUND_STARTED", "payload": payload})
+		case "SUBMIT_ROOM_ACTION":
+			var req session.SubmitRoomActionRequest
+			if err := json.Unmarshal(data, &req); err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": "bad action payload"})
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			payload, err := h.mgr.SubmitRoomAction(ctx, userID, req)
+			cancel()
+			if err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
+				continue
+			}
+			conn.WriteJSON(fiber.Map{"type": "ROOM_ROUND_STARTED", "payload": payload})
+		case "INVITE_TO_ROOM":
+			var req session.InviteToRoomRequest
+			if err := json.Unmarshal(data, &req); err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": "bad invite payload"})
+				continue
+			}
+			if err := h.mgr.InviteToRoom(userID, req); err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
+				continue
+			}
+			conn.WriteJSON(fiber.Map{"type": "ROOM_INVITE_SENT"})
+		case "KICK_ROOM_PLAYER":
+			var req session.KickRoomPlayerRequest
+			if err := json.Unmarshal(data, &req); err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": "bad kick payload"})
+				continue
+			}
+			snapshot, err := h.mgr.KickRoomPlayer(userID, req)
+			if err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
+				continue
+			}
+			conn.WriteJSON(fiber.Map{"type": "ROOM_PLAYER_KICKED"})
+			conn.WriteJSON(fiber.Map{"type": "ROOM_STATE", "payload": snapshot})
 		case "PING":
 			conn.WriteJSON(fiber.Map{"type": "PONG"})
 		default:
