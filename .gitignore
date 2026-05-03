@@ -73,3 +73,6 @@ app.*.map.json
 
 # Node
 node_modules/
+
+# Local browser automation artifacts
+.playwright-cli/

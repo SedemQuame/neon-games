@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../app_theme.dart';
+
 void showGameMessage(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      backgroundColor: const Color(0xFF0f172a),
+      backgroundColor: AppTheme.navBackground,
       content: Text(
         message,
-        style: const TextStyle(color: Colors.white),
+        style: context.type.body.copyWith(color: Colors.white),
       ),
     ),
   );

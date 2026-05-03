@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Glory Grid - Live Game</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-fixed-dim": "#f0c046",
+                    "surface-container": "#1c2026",
+                    "surface-bright": "#363941",
+                    "inverse-surface": "#e0e2ec",
+                    "on-surface": "#e0e2ec",
+                    "primary": "#a8c8ff",
+                    "secondary": "#f0c046",
+                    "on-tertiary": "#532200",
+                    "error": "#ffb4ab",
+                    "on-secondary": "#3f2e00",
+                    "secondary-fixed": "#ffdf9a",
+                    "primary-container": "#3691ff",
+                    "surface-tint": "#a8c8ff",
+                    "on-tertiary-container": "#481d00",
+                    "on-secondary-fixed-variant": "#5a4300",
+                    "on-tertiary-fixed": "#321200",
+                    "tertiary-container": "#e47019",
+                    "tertiary-fixed-dim": "#ffb68c",
+                    "on-surface-variant": "#c1c6d5",
+                    "secondary-container": "#b58a0b",
+                    "primary-fixed": "#d5e3ff",
+                    "on-tertiary-fixed-variant": "#753400",
+                    "on-background": "#e0e2ec",
+                    "outline-variant": "#414753",
+                    "on-primary": "#003061",
+                    "tertiary-fixed": "#ffdbc9",
+                    "surface-dim": "#10131a",
+                    "surface-container-lowest": "#0b0e15",
+                    "on-error": "#690005",
+                    "surface-container-high": "#272a31",
+                    "on-primary-container": "#002955",
+                    "surface-container-highest": "#31353c",
+                    "on-secondary-container": "#372700",
+                    "on-primary-fixed-variant": "#004689",
+                    "error-container": "#93000a",
+                    "primary-fixed-dim": "#a8c8ff",
+                    "background": "#10131a",
+                    "surface": "#10131a",
+                    "on-error-container": "#ffdad6",
+                    "surface-variant": "#31353c",
+                    "on-secondary-fixed": "#251a00",
+                    "inverse-on-surface": "#2d3038",
+                    "inverse-primary": "#005eb4",
+                    "tertiary": "#ffb68c",
+                    "on-primary-fixed": "#001b3c",
+                    "outline": "#8b919f",
+                    "surface-container-low": "#181c22"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "4px",
+                    "margin": "16px",
+                    "gutter": "12px",
+                    "xl": "32px",
+                    "sm": "8px",
+                    "md": "16px",
+                    "xs": "4px",
+                    "lg": "24px"
+            },
+            "fontFamily": {
+                    "h2": ["Plus Jakarta Sans"],
+                    "display": ["Plus Jakarta Sans"],
+                    "body-md": ["Plus Jakarta Sans"],
+                    "body-lg": ["Plus Jakarta Sans"],
+                    "h1": ["Plus Jakarta Sans"],
+                    "label-md": ["Plus Jakarta Sans"],
+                    "number-xl": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "h2": ["20px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "display": ["32px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "1.5", "fontWeight": "500"}],
+                    "h1": ["24px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "label-md": ["12px", {"lineHeight": "1", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                    "number-xl": ["28px", {"lineHeight": "1", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(16, 19, 26, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .glow-blue {
+            filter: drop-shadow(0 0 12px rgba(168, 200, 255, 0.4));
+        }
+        .mesh-bg {
+            background-color: #10131a;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(54, 145, 255, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(240, 192, 70, 0.05) 0px, transparent 50%);
+        }
+        .grid-lines {
+            background-image: 
+                linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md min-h-screen overflow-x-hidden selection:bg-primary-container/30">
+<!-- TopAppBar from JSON -->
+<header class="fixed top-0 w-full z-50 bg-slate-950/70 backdrop-blur-xl border-b border-white/10 flex justify-between items-center w-full px-4 h-16">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-white/20">
+<img alt="User Profile" data-alt="A professional headshot of a young man with a confident expression, set against a blurred cinematic background. The lighting is soft and directional, highlighting facial details while maintaining a clean, high-end corporate fintech aesthetic. The color palette is dominated by deep blues and subtle grays to match the dark UI theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA4ET-oKB73te66-Gbd7GzfXQJa_PELdhTCDiaJYXui5K4OgoSsV6BuCMoV3WqG7aJApGwIj1kRwqIXpI9MA7-RaH9V-OUjML4WhycbLBkyl2_t5wBksPsAFubdiCwEU-lkx6N2x5DMZaxoiYTvS_XvOMsCE3f5yy7DyeyfUPXBFkNq8eh22zMRjFYaDjJhcdGwVVtFlvBIoYfPdb1z05DmC_AkX0eIl7HrSJjreVI8BZjqJhRG4CkvKPnMWokq42e5GHaf5ZZ6cRw"/>
+</div>
+<span class="text-xl font-black text-white italic tracking-tighter font-['Plus_Jakarta_Sans']">Glory Grid</span>
+</div>
+<button class="bg-surface-container hover:bg-white/5 transition-colors active:scale-95 duration-200 px-4 py-2 rounded-lg border border-white/10 flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px]" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+<span class="font-['Plus_Jakarta_Sans'] font-bold tracking-tight text-white">$1,250.00</span>
+<span class="text-primary-container text-xs ml-1 font-bold">Deposit</span>
+</button>
+</header>
+<main class="pt-20 pb-28 px-4 max-w-5xl mx-auto mesh-bg min-h-screen">
+<!-- Live Game Canvas -->
+<section class="relative w-full aspect-video md:aspect-[21/9] rounded-xl overflow-hidden border border-white/5 bg-surface-container-lowest grid-lines mb-6 flex flex-col items-center justify-center">
+<!-- Animated Graph Representation -->
+<div class="absolute inset-0 flex items-end justify-start p-12 overflow-hidden pointer-events-none">
+<svg class="w-full h-full text-primary glow-blue" viewbox="0 0 1000 400">
+<path class="opacity-80" d="M0,400 Q200,380 400,300 T800,100 L1000,0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="4"></path>
+<circle class="animate-pulse" cx="800" cy="100" fill="currentColor" r="6"></circle>
+</svg>
+</div>
+<!-- Multiplier Display -->
+<div class="relative z-10 flex flex-col items-center">
+<span class="text-primary font-display text-[64px] md:text-[96px] tracking-tighter drop-shadow-2xl">1.45x</span>
+<div class="bg-primary/10 border border-primary/20 px-4 py-1 rounded-full flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+<span class="text-primary font-label-md uppercase tracking-widest">Live Prediction</span>
+</div>
+</div>
+<!-- Visual Flare -->
+<div class="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-primary/5 to-transparent"></div>
+</section>
+<!-- Round History -->
+<div class="mb-8 overflow-x-auto no-scrollbar">
+<div class="flex items-center gap-3">
+<span class="text-outline text-xs font-bold uppercase tracking-widest whitespace-nowrap mr-2">History</span>
+<div class="flex gap-2">
+<div class="px-3 py-1.5 rounded-lg bg-surface-container-high border border-white/5 text-primary font-bold text-sm">2.41x</div>
+<div class="px-3 py-1.5 rounded-lg bg-surface-container-high border border-white/5 text-secondary font-bold text-sm">11.02x</div>
+<div class="px-3 py-1.5 rounded-lg bg-surface-container-high border border-white/5 text-error font-bold text-sm">0.98x</div>
+<div class="px-3 py-1.5 rounded-lg bg-surface-container-high border border-white/5 text-on-surface-variant font-bold text-sm">1.85x</div>
+<div class="px-3 py-1.5 rounded-lg bg-surface-container-high border border-white/5 text-primary font-bold text-sm">3.12x</div>
+<div class="px-3 py-1.5 rounded-lg bg-surface-container-high border border-white/5 text-secondary font-bold text-sm">8.40x</div>
+<div class="px-3 py-1.5 rounded-lg bg-surface-container-high border border-white/5 text-on-surface-variant font-bold text-sm">1.20x</div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+<!-- Player List (Bento Column) -->
+<aside class="md:col-span-4 lg:col-span-3 glass-panel rounded-xl border border-white/10 p-4 h-[400px] flex flex-col">
+<div class="flex justify-between items-center mb-4">
+<h3 class="text-sm font-bold text-white uppercase tracking-wider">Players</h3>
+<span class="text-primary text-xs font-bold bg-primary/10 px-2 py-0.5 rounded">428 Live</span>
+</div>
+<div class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+<!-- Player Item -->
+<div class="flex items-center justify-between group">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[10px] font-black text-outline">JD</div>
+<div>
+<p class="text-white text-xs font-bold leading-none">Jordan D.</p>
+<p class="text-[10px] text-outline mt-1">$45.00</p>
+</div>
+</div>
+<span class="text-outline-variant text-[10px] font-bold group-hover:text-primary transition-colors">...</span>
+</div>
+<div class="flex items-center justify-between group">
+<div class="flex items-center gap-3">
+<img alt="Sarah K." class="w-8 h-8 rounded object-cover" data-alt="A portrait of a smiling woman with stylish glasses and vibrant orange hair, against a soft-focus urban environment at sunset. The lighting is warm and cinematic, emphasizing a premium social-media style quality that fits a high-energy gaming app. Colors are rich with golden hour tones and deep shadows." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDiqjYS3MEwLaRnscRwkebSkG1sX8UJBzTCDq251Chb4nOX0UiGY7u9PM88ujTuyetl6Fn4mTiXkThJfK2vq_UNaslqewHIxIQbnvhGkG07LH1FlRY3nJ_Udvh1xNm1ct-92zNl-4eix0jdxBhyfFjdkVOB-eDiGMia52hkx5Z9gxrWOmhKJSkQlA1X47N3biqzbEswXD07cZCykS_vbIzRC00GBbW_HQsfCWpEdQWVTrok9Ejteo4mZ94WE-OZsP_uOR2A96u1T-k"/>
+<div>
+<p class="text-white text-xs font-bold leading-none">Sarah K.</p>
+<p class="text-[10px] text-outline mt-1">$120.00</p>
+</div>
+</div>
+<span class="text-primary-container text-[10px] font-black">2.1x</span>
+</div>
+<div class="flex items-center justify-between group opacity-60">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[10px] font-black text-outline">AM</div>
+<div>
+<p class="text-white text-xs font-bold leading-none">Alex M.</p>
+<p class="text-[10px] text-outline mt-1">$10.00</p>
+</div>
+</div>
+<span class="text-error text-[10px] font-bold">1.0x</span>
+</div>
+<!-- Mock players -->
+<div class="flex items-center justify-between group">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[10px] font-black text-outline">RR</div>
+<div>
+<p class="text-white text-xs font-bold leading-none">Rick R.</p>
+<p class="text-[10px] text-outline mt-1">$250.00</p>
+</div>
+</div>
+<span class="text-outline-variant text-[10px] font-bold">...</span>
+</div>
+<div class="flex items-center justify-between group">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-[10px] font-black text-outline">BT</div>
+<div>
+<p class="text-white text-xs font-bold leading-none">Ben T.</p>
+<p class="text-[10px] text-outline mt-1">$5.00</p>
+</div>
+</div>
+<span class="text-outline-variant text-[10px] font-bold">...</span>
+</div>
+</div>
+</aside>
+<!-- Betting Console (Bento Center) -->
+<div class="md:col-span-8 lg:col-span-9 space-y-6">
+<div class="glass-panel rounded-xl border border-white/10 p-6 flex flex-col md:flex-row gap-6">
+<!-- Input Section -->
+<div class="flex-1 space-y-4">
+<div>
+<label class="text-xs font-bold text-outline uppercase tracking-widest mb-2 block">Stake Amount</label>
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+<span class="text-secondary font-bold">$</span>
+</div>
+<input class="w-full bg-surface-container-lowest border border-white/10 rounded-xl py-4 pl-10 pr-4 text-white font-number-xl focus:outline-none focus:border-primary-container transition-all" type="number" value="10.00"/>
+<div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-highest text-on-surface-variant text-xs font-bold hover:bg-white/10 transition-colors">1/2</button>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-highest text-on-surface-variant text-xs font-bold hover:bg-white/10 transition-colors">x2</button>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-highest text-on-surface-variant text-xs font-bold hover:bg-white/10 transition-colors">Max</button>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-4 gap-2">
+<button class="py-2 rounded-lg border border-white/5 bg-surface-container text-xs font-bold text-outline hover:text-white transition-colors">$1.00</button>
+<button class="py-2 rounded-lg border border-white/5 bg-surface-container text-xs font-bold text-outline hover:text-white transition-colors">$10.00</button>
+<button class="py-2 rounded-lg border border-white/5 bg-surface-container text-xs font-bold text-outline hover:text-white transition-colors">$100.00</button>
+<button class="py-2 rounded-lg border border-white/5 bg-surface-container text-xs font-bold text-outline hover:text-white transition-colors">Custom</button>
+</div>
+</div>
+<!-- Action Section -->
+<div class="flex-1 flex flex-col justify-end gap-4">
+<div class="flex justify-between items-center px-2">
+<span class="text-xs font-bold text-outline uppercase tracking-widest">Auto Cashout</span>
+<span class="text-primary font-bold">2.00x</span>
+</div>
+<button class="w-full bg-primary-container hover:bg-primary-container/90 text-on-primary-container font-display text-h1 py-6 rounded-xl shadow-[0_0_20px_rgba(54,145,255,0.4)] active:scale-95 transition-all flex flex-col items-center justify-center">
+<span>PLACE BET</span>
+<span class="text-xs font-bold opacity-80 mt-1 uppercase tracking-[0.2em]">Wait for next round</span>
+</button>
+</div>
+</div>
+<!-- Rewards / Promo -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<div class="relative h-32 rounded-xl overflow-hidden group cursor-pointer border border-white/10">
+<img alt="Reward 1" class="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500" data-alt="An abstract, high-contrast background of liquid metal textures in deep electric blue and obsidian. The surface reflects sharp highlights of white neon, suggesting a high-speed, futuristic technology atmosphere. It serves as a decorative backing for a rewards card in a premium fintech app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGtMuetNCpMn4PEmoqRgwkmjiqchFrtnqaCiPGPtz8iRV8uoHMJubqNkcXQu0tX9hm-GBGXyL1XP35qw4U1_46dhNDiCA2gLhjoXZkXmE4Q-mvxt8_lnfOCjeBjLc3_XvOQ08GEhCeLbA7YG6RfnyA27oepdDa4iq1eUhyTA1Hn9-QOPQt0G-ISV8poF7xrs74fQDKZ10M5cDNJ42N3oh4nvGTwZs_drao3PhSO09EhhmH2ADPYo73dfS8SZcfV62OMAHSRvMBNtY"/>
+<div class="absolute inset-0 bg-gradient-to-r from-surface-container-lowest to-transparent p-4 flex flex-col justify-center">
+<span class="text-secondary font-bold text-xs uppercase tracking-widest mb-1">VIP Daily</span>
+<h4 class="text-white font-h2 mb-1">Grid Master Bonus</h4>
+<p class="text-outline text-xs">Climb the ladder for up to 5% rebate</p>
+</div>
+</div>
+<div class="relative h-32 rounded-xl overflow-hidden group cursor-pointer border border-white/10">
+<img alt="Reward 2" class="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-500" data-alt="Modern 3D geometric shapes floating in a dark void, rendered with glassmorphic materials and glowing edges. The palette is dominated by deep blues and vibrant teals, with sharp focus and cinematic depth of field. The aesthetic conveys precision and futuristic gaming elegance." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwVWml2vYx69aOvjwvAj5azkNK4OO2Is0PYZIJj-ZCw9DlxDeyoVdyCxvGnSxGfH6jzwA3NpKRVlZB3LAJuHY8j5VjSWMFoB-EQJBLwLUk8mNZTIKwsvKFHUAND4z7vgFur26_XcEtqHlRhr41uUNbNRATuD9zpRvYlWzkY68eSQzSyWSL-rcPsMd0Xbt6B84g3pDM3u9C0ba0C8h9aDd8k3OtaF5nbTb-TKBGuMOytoGjnUc2B91-_fkbmSnM_jHHjYd1PlyJ2aA"/>
+<div class="absolute inset-0 bg-gradient-to-r from-surface-container-lowest to-transparent p-4 flex flex-col justify-center">
+<span class="text-primary font-bold text-xs uppercase tracking-widest mb-1">Tournament</span>
+<h4 class="text-white font-h2 mb-1">$5,000.00 Pool</h4>
+<p class="text-outline text-xs">Top 10 players share the glory</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar from JSON -->
+<nav class="fixed bottom-0 left-0 w-full h-20 flex justify-around items-center px-6 pb-4 bg-slate-950/80 backdrop-blur-2xl border-t border-slate-800 z-50 rounded-t-lg shadow-[0_-4px_20px_rgba(0,0,0,0.5)]">
+<a class="flex flex-col items-center justify-center text-blue-500 drop-shadow-[0_0_8px_rgba(19,127,236,0.5)] hover:text-blue-300 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined text-[24px]">grid_view</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-blue-300 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined text-[24px]">account_balance_wallet</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">Wallet</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-blue-300 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined text-[24px]">groups</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">Multiplayer</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-blue-300 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined text-[24px]">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">Profile</span>
+</a>
+</nav>
+<style>
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+    </style>
+</body></html>

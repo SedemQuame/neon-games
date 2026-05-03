@@ -7,8 +7,12 @@ import '../../app_theme.dart';
 import '../../services/game_service.dart';
 import '../../utils/balance_guard.dart';
 import '../../utils/game_round_mixin.dart';
+import '../../utils/play_mode.dart';
+import '../../widgets/game_activity_app_bar.dart';
 import '../../widgets/game_message.dart';
-import '../../widgets/wallet_balance_chip.dart';
+import '../../widgets/play_mode_toggle.dart';
+import '../../widgets/press_scale.dart';
+import '../../widgets/stake_adjuster.dart';
 
 class KineticSurvivorScreen extends StatefulWidget {
   const KineticSurvivorScreen({super.key});
@@ -21,7 +25,8 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
     with TickerProviderStateMixin, GameRoundMixin<KineticSurvivorScreen> {
   static const int _minMinutes = 3;
   static const int _maxMinutes = 15;
-  double stakeAmount = 10.0;
+  double stakeAmount = BalanceGuard.minStakeUsd;
+  PlayMode _playMode = PlayMode.demo;
   int durationMinutes = _minMinutes;
 
   final math.Random _rng = math.Random();
@@ -41,42 +46,8 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 20,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.directions_run,
-              color: Colors.orangeAccent,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'US30',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.keyboard_arrow_down,
-              color: Colors.white.withValues(alpha: 0.5),
-            ),
-          ],
-        ),
-        actions: const [WalletBalanceChip()],
-      ),
+      backgroundColor: AppTheme.gameBackground,
+      appBar: const GameActivityAppBar(title: 'Kinetic Survivor'),
       body: Stack(
         children: [
           SafeArea(
@@ -86,16 +57,9 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
                   child: Container(
                     margin: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppTheme.surfaceDark,
+                      color: AppTheme.gameSurface,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppTheme.borderDark),
-                      image: const DecorationImage(
-                        image: AssetImage(
-                          'assets/images/kinetic_survivor_bg.png',
-                        ),
-                        fit: BoxFit.cover,
-                        opacity: 0.3,
-                      ),
+                      border: Border.all(color: AppTheme.gameBorder),
                       boxShadow: [
                         BoxShadow(
                           color: const Color(
@@ -219,11 +183,42 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundDark,
-                    border: Border(top: BorderSide(color: AppTheme.borderDark)),
+                    color: AppTheme.gameBackground,
+                    border: Border(top: BorderSide(color: AppTheme.gameBorder)),
                   ),
                   child: Column(
                     children: [
+                      StakeAdjuster(
+                        label: 'STAKE',
+                        value: stakeAmount,
+                        enabled: !_isSimulating,
+                        onChanged: (next) => setState(() => stakeAmount = next),
+                      ),
+                      const SizedBox(height: 12),
+                      PlayModeToggle(
+                        value: _playMode,
+                        enabled: !_isSimulating,
+                        onChanged: (mode) => setState(() => _playMode = mode),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTradeButton(
+                              label: 'SURVIVE',
+                              icon: Icons.shield,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildTradeButton(
+                              label: 'BREACH',
+                              icon: Icons.flash_on,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
@@ -243,19 +238,6 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
                               }),
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildControlPanel(
-                              label: 'STAKE',
-                              value: '\$${stakeAmount.toStringAsFixed(2)}',
-                              icon: Icons.monetization_on,
-                              onDecrease: () => setState(
-                                () => stakeAmount > 1 ? stakeAmount -= 1 : null,
-                              ),
-                              onIncrease: () =>
-                                  setState(() => stakeAmount += 1),
-                            ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -266,30 +248,10 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
                           style: TextStyle(
                             color: _highlightWin
                                 ? Colors.greenAccent
-                                : Colors.white70,
+                                : AppTheme.textSecondary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTradeButton(
-                              label: 'SURVIVE',
-                              icon: Icons.shield,
-                              color: Colors.orange,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildTradeButton(
-                              label: 'BREACH',
-                              icon: Icons.flash_on,
-                              color: Colors.redAccent,
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
@@ -312,9 +274,9 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
+        color: AppTheme.gameSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderDark),
+        border: Border.all(color: AppTheme.gameBorder),
       ),
       child: Row(
         children: [
@@ -326,7 +288,7 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
               Text(
                 label,
                 style: const TextStyle(
-                  color: Colors.white54,
+                  color: AppTheme.textSecondary,
                   fontSize: 10,
                   letterSpacing: 1,
                 ),
@@ -334,7 +296,7 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
               Text(
                 value,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppTheme.textPrimary,
                   fontSize: 16,
                   fontWeight: FontWeight.w900,
                 ),
@@ -342,51 +304,83 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
             ],
           ),
           const Spacer(),
-          IconButton(
-            onPressed: onDecrease,
-            icon: const Icon(Icons.remove, color: Colors.white70),
-          ),
-          IconButton(
-            onPressed: onIncrease,
-            icon: const Icon(Icons.add, color: Colors.white70),
-          ),
+          _buildStakeStepButton(icon: Icons.remove, onTap: onDecrease),
+          const SizedBox(width: 8),
+          _buildStakeStepButton(icon: Icons.add, onTap: onIncrease),
         ],
       ),
     );
   }
 
-  Widget _buildTradeButton({
-    required String label,
+  Widget _buildStakeStepButton({
     required IconData icon,
-    required Color color,
+    required VoidCallback? onTap,
   }) {
-    final busy = _isSimulating && label == _activeMode;
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppTheme.goldButtonTop, AppTheme.goldButtonBottom],
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.goldButtonBottom),
+        ),
+        child: Icon(icon, color: AppTheme.goldText),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+    );
+  }
+
+  Widget _buildTradeButton({required String label, required IconData icon}) {
+    final busy = _isSimulating && label == _activeMode;
+    return PressScale(
+      enabled: !busy,
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: busy
+                ? const [AppTheme.goldDisabledTop, AppTheme.goldDisabledBottom]
+                : const [AppTheme.goldButtonTop, AppTheme.goldButtonBottom],
+          ),
           borderRadius: BorderRadius.circular(16),
-          onTap: busy ? null : () => _handlePlay(label),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(width: 8),
-              Text(
-                busy ? 'ARMED...' : label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
+          border: Border.all(
+            color: AppTheme.goldButtonBottom.withValues(
+              alpha: busy ? 0.4 : 0.9,
+            ),
+            width: 1.2,
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: busy ? null : () => _handlePlay(label),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  color: AppTheme.goldText.withValues(alpha: busy ? 0.65 : 1),
+                  size: 24,
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Text(
+                  busy ? 'ARMED...' : label,
+                  style: TextStyle(
+                    color: AppTheme.goldText.withValues(alpha: busy ? 0.65 : 1),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -394,17 +388,40 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
   }
 
   Future<void> _handlePlay(String mode) async {
-    final canPlay = await BalanceGuard.ensurePlayableStake(
+    if (_isSimulating) return;
+    final canPlay = await ensureStakeForPlayMode(
       context,
+      _playMode,
       stakeAmount,
     );
-    if (!canPlay || _isSimulating) return;
+    if (!canPlay) return;
+    if (!mounted) return;
     try {
       setState(() {
         _status = 'Deploying $mode run...';
         _highlightWin = false;
         _activeMode = mode;
       });
+      if (_playMode.isDemo) {
+        setState(() {
+          _status = 'Demo mission running...';
+          _isSimulating = true;
+        });
+        _startBallDrift(mode);
+        showGameMessage(context, 'Demo mission. Wallet unchanged.');
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        if (!mounted || !_isSimulating) return;
+        onGameResult(
+          buildDemoGameResult(
+            gameType: 'KINETIC_SURVIVOR',
+            stakeUsd: stakeAmount,
+            payoutMultiplier: 2.1,
+            winChance: 0.46,
+            rng: _rng,
+          ),
+        );
+        return;
+      }
       final ack = await placeGameBet(
         gameType: 'KINETIC_SURVIVOR',
         stakeUsd: stakeAmount,

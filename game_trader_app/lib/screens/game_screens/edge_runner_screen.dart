@@ -4,8 +4,12 @@ import '../../app_theme.dart';
 import '../../services/game_service.dart';
 import '../../utils/balance_guard.dart';
 import '../../utils/game_round_mixin.dart';
+import '../../utils/play_mode.dart';
+import '../../widgets/game_activity_app_bar.dart';
 import '../../widgets/game_message.dart';
-import '../../widgets/wallet_balance_chip.dart';
+import '../../widgets/play_mode_toggle.dart';
+import '../../widgets/press_scale.dart';
+import '../../widgets/stake_adjuster.dart';
 
 class EdgeRunnerScreen extends StatefulWidget {
   const EdgeRunnerScreen({super.key});
@@ -19,7 +23,8 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
   static const int _minTicks = 5;
   static const int _maxTicks = 10;
 
-  double stakeAmount = 10.0;
+  double stakeAmount = BalanceGuard.minStakeUsd;
+  PlayMode _playMode = PlayMode.demo;
   int durationTicks = _minTicks;
   bool _isPlacing = false;
   String _statusMessage = 'Awaiting signal';
@@ -28,42 +33,8 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 20,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.currency_exchange,
-              color: Colors.purpleAccent,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'GBP/JPY',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.keyboard_arrow_down,
-              color: Colors.white.withValues(alpha: 0.5),
-            ),
-          ],
-        ),
-        actions: [WalletBalanceChip()],
-      ),
+      backgroundColor: AppTheme.gameBackground,
+      appBar: const GameActivityAppBar(title: 'Edge Runner'),
       body: Stack(
         children: [
           SafeArea(
@@ -74,14 +45,9 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
                   child: Container(
                     margin: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppTheme.surfaceDark,
+                      color: AppTheme.gameSurface,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppTheme.borderDark),
-                      image: const DecorationImage(
-                        image: AssetImage('assets/images/edge_runner_bg.png'),
-                        fit: BoxFit.cover,
-                        opacity: 0.3,
-                      ),
+                      border: Border.all(color: AppTheme.gameBorder),
                       boxShadow: [
                         BoxShadow(
                           color: AppTheme.primaryColor.withValues(alpha: 0.05),
@@ -221,12 +187,45 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundDark,
-                    border: Border(top: BorderSide(color: AppTheme.borderDark)),
+                    color: AppTheme.gameBackground,
+                    border: Border(top: BorderSide(color: AppTheme.gameBorder)),
                   ),
                   child: Column(
                     children: [
-                      // Stake & Duration
+                      // Stake (full width)
+                      StakeAdjuster(
+                        label: 'STAKE',
+                        value: stakeAmount,
+                        enabled: !_isPlacing,
+                        onChanged: (next) => setState(() => stakeAmount = next),
+                      ),
+                      const SizedBox(height: 12),
+                      PlayModeToggle(
+                        value: _playMode,
+                        enabled: !_isPlacing,
+                        onChanged: (mode) => setState(() => _playMode = mode),
+                      ),
+                      const SizedBox(height: 16),
+                      // Action Buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTradeButton(
+                              label: 'TOUCH',
+                              icon: Icons.touch_app,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildTradeButton(
+                              label: 'NO TOUCH',
+                              icon: Icons.do_not_touch,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Duration
                       Row(
                         children: [
                           Expanded(
@@ -246,22 +245,9 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
                               }),
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildControlPanel(
-                              label: 'STAKE',
-                              value: '\$${stakeAmount.toStringAsFixed(2)}',
-                              icon: Icons.monetization_on,
-                              onDecrease: () => setState(
-                                () => stakeAmount > 1 ? stakeAmount -= 1 : null,
-                              ),
-                              onIncrease: () =>
-                                  setState(() => stakeAmount += 1),
-                            ),
-                          ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       // Payout Info
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -290,35 +276,12 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
                         child: Text(
                           _statusMessage,
                           style: const TextStyle(
-                            color: Colors.white70,
+                            color: AppTheme.textSecondary,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                             letterSpacing: 0.4,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTradeButton(
-                              label: 'TOUCH',
-                              icon: Icons.touch_app,
-                              color: const Color(0xFF8b5cf6), // Medium Purple
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildTradeButton(
-                              label: 'NO TOUCH',
-                              icon: Icons.do_not_touch,
-                              color: const Color(
-                                0xFFd946ef,
-                              ), // Fuchsia / Pinkish Purple
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),
@@ -341,9 +304,9 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
+        color: AppTheme.gameSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderDark),
+        border: Border.all(color: AppTheme.gameBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,12 +335,19 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundDark,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.goldButtonTop,
+                        AppTheme.goldButtonBottom,
+                      ],
+                    ),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.remove,
-                    color: Colors.white,
+                    color: AppTheme.goldText,
                     size: 16,
                   ),
                 ),
@@ -385,7 +355,7 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
               Text(
                 value,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppTheme.textPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -395,10 +365,21 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundDark,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.goldButtonTop,
+                        AppTheme.goldButtonBottom,
+                      ],
+                    ),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.add, color: Colors.white, size: 16),
+                  child: const Icon(
+                    Icons.add,
+                    color: AppTheme.goldText,
+                    size: 16,
+                  ),
                 ),
               ),
             ],
@@ -408,46 +389,67 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
     );
   }
 
-  Widget _buildTradeButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.2),
-            blurRadius: 16,
-            spreadRadius: -4,
+  Widget _buildTradeButton({required String label, required IconData icon}) {
+    final isDisabled = _isPlacing;
+    return PressScale(
+      enabled: !isDisabled,
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDisabled
+                ? const [AppTheme.goldDisabledTop, AppTheme.goldDisabledBottom]
+                : const [AppTheme.goldButtonTop, AppTheme.goldButtonBottom],
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: _isPlacing ? null : () => _handleTrade(label),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w900,
-                  fontSize:
-                      16, // Adjusted slightly smaller for "NO TOUCH" to fit
-                  letterSpacing: -0.5,
-                ),
+          border: Border.all(
+            color: AppTheme.goldButtonBottom.withValues(
+              alpha: isDisabled ? 0.4 : 0.9,
+            ),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.goldButtonBottom.withValues(
+                alpha: isDisabled ? 0.08 : 0.26,
               ),
-            ],
+              blurRadius: 16,
+              spreadRadius: -4,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: isDisabled ? null : () => _handleTrade(label),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  color: AppTheme.goldText.withValues(
+                    alpha: isDisabled ? 0.65 : 1,
+                  ),
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: AppTheme.goldText.withValues(
+                      alpha: isDisabled ? 0.65 : 1,
+                    ),
+                    fontWeight: FontWeight.w900,
+                    fontSize:
+                        16, // Adjusted slightly smaller for "NO TOUCH" to fit
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -456,8 +458,9 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
 
   Future<void> _handleTrade(String label) async {
     if (_isPlacing) return;
-    final canPlay = await BalanceGuard.ensurePlayableStake(
+    final canPlay = await ensureStakeForPlayMode(
       context,
+      _playMode,
       stakeAmount,
     );
     if (!canPlay || !mounted) return;
@@ -470,6 +473,21 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
       _activeMode = label;
       _statusMessage = '$label vector routing...';
     });
+
+    if (_playMode.isDemo) {
+      showGameMessage(context, 'Demo order. Wallet unchanged.');
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (!mounted || !_isPlacing) return;
+      onGameResult(
+        buildDemoGameResult(
+          gameType: 'EDGE_RUNNER',
+          stakeUsd: stakeAmount,
+          payoutMultiplier: 3.5,
+          winChance: 0.36,
+        ),
+      );
+      return;
+    }
 
     try {
       await placeGameBet(

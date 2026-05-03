@@ -35,6 +35,19 @@ mixin GameRoundMixin<T extends StatefulWidget> on State<T> {
     return ack;
   }
 
+  Future<void> cashOutActiveGameBet({double? multiplier}) async {
+    final sessionId = activeSessionId;
+    if (sessionId == null || sessionId.isEmpty) {
+      throw const GameSocketException('No active round to cash out');
+    }
+    await _session.ensureGameSocket();
+    _session.gameService.cashOutBet(
+      sessionId: sessionId,
+      traceId: activeTraceId,
+      multiplier: multiplier,
+    );
+  }
+
   void _handleIncomingGameEvent(GameEvent event) {
     if (event is GameResultEvent && event.sessionId == activeSessionId) {
       activeSessionId = null;

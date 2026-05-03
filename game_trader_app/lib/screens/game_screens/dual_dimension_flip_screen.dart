@@ -1,15 +1,17 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
+import '../../app_theme.dart';
 import '../../services/game_service.dart';
-import '../../services/session_manager.dart';
 import '../../utils/balance_guard.dart';
-import '../../utils/format.dart';
 import '../../utils/game_round_mixin.dart';
+import '../../utils/play_mode.dart';
+import '../../widgets/game_activity_app_bar.dart';
 import '../../widgets/game_message.dart';
-import '../../widgets/wallet_balance_chip.dart';
+import '../../widgets/play_mode_toggle.dart';
+import '../../widgets/press_scale.dart';
+import '../../widgets/stake_adjuster.dart';
 
 class DualDimensionFlipScreen extends StatefulWidget {
   const DualDimensionFlipScreen({super.key});
@@ -25,15 +27,15 @@ enum UserPick { even, odd }
 
 class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
     with TickerProviderStateMixin, GameRoundMixin<DualDimensionFlipScreen> {
-  double stakeAmount = 10.00;
-  List<int> recentTicks = [8, 3, 2, 0, 7];
+  double stakeAmount = BalanceGuard.minStakeUsd;
+  PlayMode _playMode = PlayMode.demo;
   int currentNumber = 8;
 
   GamePhase gamePhase = GamePhase.idle;
   UserPick? userPick;
   bool? userWon;
   bool _isPlacing = false;
-  String _statusMessage = 'Choose EVEN or ODD';
+  String _statusMessage = 'Choose Even or Odd';
   final Random _rng = Random();
 
   late AnimationController _pulseController;
@@ -74,11 +76,13 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
 
   Future<void> _onPickTapped(UserPick pick) async {
     if (gamePhase != GamePhase.idle || _isPlacing) return;
-    final canPlay = await BalanceGuard.ensurePlayableStake(
+    final canPlay = await ensureStakeForPlayMode(
       context,
+      _playMode,
       stakeAmount,
     );
     if (!canPlay) return;
+    if (!mounted) return;
 
     setState(() {
       userPick = pick;
@@ -88,6 +92,26 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
           ? 'Calibrating EVEN core...'
           : 'Calibrating ODD core...';
     });
+
+    if (_playMode.isDemo) {
+      setState(() {
+        _isPlacing = false;
+        _statusMessage = 'Demo round running...';
+      });
+      _startShuffleLoop();
+      showGameMessage(context, 'Demo round. Wallet unchanged.');
+      await Future<void>.delayed(const Duration(milliseconds: 950));
+      if (!mounted || gamePhase != GamePhase.shuffling) return;
+      onGameResult(
+        buildDemoGameResult(
+          gameType: 'DUAL_DIMENSION_FLIP',
+          stakeUsd: stakeAmount,
+          payoutMultiplier: 1.95,
+          winChance: 0.49,
+        ),
+      );
+      return;
+    }
 
     try {
       await placeGameBet(
@@ -119,7 +143,7 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
         userPick = null;
         userWon = null;
         _isPlacing = false;
-        _statusMessage = 'Choose EVEN or ODD';
+        _statusMessage = 'Choose Even or Odd';
       });
     });
   }
@@ -173,7 +197,6 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
     if (!mounted) return;
     setState(() {
       currentNumber = resultNumber;
-      recentTicks = [resultNumber, ...recentTicks.take(4)];
       userWon = win;
       gamePhase = GamePhase.result;
       _statusMessage = win
@@ -191,151 +214,121 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
     return value;
   }
 
-  String get _coreLabel {
-    if (gamePhase == GamePhase.idle) return 'EVEN';
-    if (gamePhase == GamePhase.shuffling) return '—';
-    return currentNumber % 2 == 0 ? 'EVEN' : 'ODD';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF100B16),
+      backgroundColor: AppTheme.gameBackground,
+      appBar: const GameActivityAppBar(title: 'Even or Odd'),
       body: Stack(
         children: [
-          // Background Split
-          Column(
-            children: [
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFFFDFBFF), Color(0xFFEBDDFF)],
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(child: Container(color: const Color(0xFF100B16))),
-            ],
-          ),
+          Positioned.fill(child: Container(color: AppTheme.gameBackground)),
 
-          // Main Content
           SafeArea(
             child: Column(
               children: [
-                // App Bar
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: 16.0,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new,
-                          color: Color(0xFF100B16),
-                          size: 24,
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            const Text(
-                              'LIVE BALANCE',
-                              style: TextStyle(
-                                color: Color(0xFF6B7280),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2.0,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Consumer<SessionManager>(
-                              builder: (context, session, _) {
-                                return Text(
-                                  formatCurrency(
-                                    session.cachedBalance?.availableUsd,
-                                  ),
-                                  style: const TextStyle(
-                                    color: Color(0xFF100B16),
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.5,
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const WalletBalanceChip(
-                        margin: EdgeInsets.only(left: 8),
-                        backgroundColor: Color(0xFFede9fe),
-                        borderColor: Color(0xFFddd6fe),
-                        iconColor: Color(0xFF6B21A8),
-                        textColor: Color(0xFF6B21A8),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Top: EVEN label
                 Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'THE CORE',
-                        style: TextStyle(
-                          color: Color(0xFF9333EA),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 4.0,
+                  child: Center(
+                    child: AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) {
+                        final glow = gamePhase == GamePhase.shuffling
+                            ? 0.3 + _pulseController.value * 0.4
+                            : 0.3;
+                        return Container(
+                          width: 156,
+                          height: 156,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const RadialGradient(
+                              colors: [Color(0xFFF3F3EF), Color(0xFFD7D4CC)],
+                              stops: [0.4, 1.0],
+                            ),
+                            border: Border.all(
+                              color: const Color(
+                                0xFFC9AA5C,
+                              ).withValues(alpha: 0.7),
+                              width: 4,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFFC9AA5C,
+                                ).withValues(alpha: glow),
+                                blurRadius: 40,
+                                spreadRadius: 10,
+                              ),
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                blurRadius: 30,
+                                offset: const Offset(0, 15),
+                              ),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: child,
+                        );
+                      },
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 100),
+                        transitionBuilder: (child, anim) =>
+                            ScaleTransition(scale: anim, child: child),
+                        child: Text(
+                          currentNumber.toString(),
+                          key: ValueKey(currentNumber),
+                          style: const TextStyle(
+                            fontSize: 84,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(color: Color(0xFF7D776A), blurRadius: 20),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 200),
-                            child: Text(
-                              _coreLabel,
-                              key: ValueKey(_coreLabel),
-                              style: const TextStyle(
-                                color: Color(0xFF7E22CE),
-                                fontSize: 56,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -2.0,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.brightness_high,
-                            color: Color(0xFF7E22CE),
-                            size: 36,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 80),
-                    ],
+                    ),
                   ),
                 ),
 
-                // Bottom section
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 70),
-
-                      // EVEN / ODD Pick Buttons
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: StakeAdjuster(
+                          label: 'STAKE',
+                          value: stakeAmount,
+                          enabled: gamePhase == GamePhase.idle && !_isPlacing,
+                          onChanged: (next) =>
+                              setState(() => stakeAmount = next),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: PlayModeToggle(
+                          value: _playMode,
+                          enabled: gamePhase == GamePhase.idle && !_isPlacing,
+                          onChanged: (mode) => setState(() => _playMode = mode),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _statusMessage,
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24.0),
                         child: Row(
@@ -347,7 +340,7 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
                                 pick: UserPick.even,
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 16),
                             Expanded(
                               child: _buildPickButton(
                                 label: 'ODD',
@@ -358,186 +351,10 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
                           ],
                         ),
                       ),
-
-                      const SizedBox(height: 28),
-
-                      // Payout info
-                      const Text(
-                        'PAYOUT: 9.2x  •  RECENT TRANSITIONS',
-                        style: TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 2.0,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Recent Tick Bubbles
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: recentTicks.map((tick) {
-                          bool isEven = tick % 2 == 0;
-                          return Container(
-                            width: 32,
-                            height: 32,
-                            margin: const EdgeInsets.symmetric(horizontal: 6),
-                            decoration: BoxDecoration(
-                              color: isEven
-                                  ? const Color(0xFF9333EA)
-                                  : const Color(0xFF1F2937),
-                              shape: BoxShape.circle,
-                              border: isEven
-                                  ? null
-                                  : Border.all(color: const Color(0xFF374151)),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              tick.toString(),
-                              style: TextStyle(
-                                color: isEven
-                                    ? Colors.white
-                                    : const Color(0xFF9CA3AF),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-
-                      const SizedBox(height: 16),
-                      Text(
-                        _statusMessage,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Stake Box
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF231E33),
-                            borderRadius: BorderRadius.circular(32),
-                            border: Border.all(color: const Color(0xFF38334E)),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'STAKE',
-                                    style: TextStyle(
-                                      color: Color(0xFF6B7280),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 1.0,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '\$${stakeAmount.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  _buildCircledIcon(Icons.remove, () {
-                                    if (gamePhase == GamePhase.idle) {
-                                      setState(() {
-                                        if (stakeAmount > 1) stakeAmount -= 1;
-                                      });
-                                    }
-                                  }),
-                                  const SizedBox(width: 8),
-                                  _buildCircledIcon(Icons.add, () {
-                                    if (gamePhase == GamePhase.idle) {
-                                      setState(() => stakeAmount += 1);
-                                    }
-                                  }),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
               ],
-            ),
-          ),
-
-          // Center Floating Orb
-          Center(
-            child: AnimatedBuilder(
-              animation: _pulseController,
-              builder: (context, child) {
-                final glow = gamePhase == GamePhase.shuffling
-                    ? 0.3 + _pulseController.value * 0.4
-                    : 0.3;
-                return Container(
-                  width: 156,
-                  height: 156,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const RadialGradient(
-                      colors: [Colors.white, Color(0xFFEBDDFF)],
-                      stops: [0.4, 1.0],
-                    ),
-                    border: Border.all(
-                      color: const Color(0xFF7E22CE).withValues(alpha: 0.6),
-                      width: 4,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF7E22CE).withValues(alpha: glow),
-                        blurRadius: 40,
-                        spreadRadius: 10,
-                      ),
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        blurRadius: 30,
-                        offset: const Offset(0, 15),
-                      ),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: child,
-                );
-              },
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 100),
-                transitionBuilder: (child, anim) =>
-                    ScaleTransition(scale: anim, child: child),
-                child: Text(
-                  currentNumber.toString(),
-                  key: ValueKey(currentNumber),
-                  style: const TextStyle(
-                    fontSize: 84,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white,
-                    shadows: [Shadow(color: Color(0xFFC084FC), blurRadius: 20)],
-                  ),
-                ),
-              ),
             ),
           ),
 
@@ -614,14 +431,17 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
                             height: 56,
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF9333EA), Color(0xFF6D28D9)],
+                                colors: [
+                                  AppTheme.goldButtonTop,
+                                  AppTheme.goldButtonBottom,
+                                ],
                               ),
                               borderRadius: BorderRadius.circular(28),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(
-                                    0xFF9333EA,
-                                  ).withValues(alpha: 0.5),
+                                  color: AppTheme.goldButtonBottom.withValues(
+                                    alpha: 0.4,
+                                  ),
                                   blurRadius: 20,
                                   spreadRadius: -5,
                                   offset: const Offset(0, 8),
@@ -632,7 +452,7 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
                             child: const Text(
                               'PLAY AGAIN',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppTheme.goldText,
                                 fontWeight: FontWeight.w900,
                                 fontSize: 16,
                                 letterSpacing: 3.0,
@@ -680,73 +500,63 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
     required IconData icon,
     required UserPick pick,
   }) {
-    final isSelected = userPick == pick;
-    final isDisabled = gamePhase != GamePhase.idle || _isPlacing;
-    return GestureDetector(
-      onTap: isDisabled ? null : () => _onPickTapped(pick),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+    final busy = gamePhase != GamePhase.idle || _isPlacing;
+    return PressScale(
+      enabled: !busy,
+      child: Container(
         height: 64,
         decoration: BoxDecoration(
-          gradient: isSelected
-              ? const LinearGradient(
-                  colors: [Color(0xFF9333EA), Color(0xFF6D28D9)],
-                )
-              : null,
-          color: isSelected ? null : const Color(0xFF231E33),
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFFA855F7)
-                : const Color(0xFF38334E),
-            width: 2,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: busy
+                ? const [AppTheme.goldDisabledTop, AppTheme.goldDisabledBottom]
+                : const [AppTheme.goldButtonTop, AppTheme.goldButtonBottom],
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF9333EA).withValues(alpha: 0.5),
-                    blurRadius: 20,
-                    spreadRadius: -4,
-                  ),
-                ]
-              : null,
-        ),
-        alignment: Alignment.center,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? Colors.white : const Color(0xFF6B7280),
-              size: 20,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppTheme.goldButtonBottom.withValues(
+              alpha: busy ? 0.4 : 0.9,
             ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF6B7280),
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-                letterSpacing: 2.0,
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.goldButtonBottom.withValues(
+                alpha: busy ? 0.08 : 0.26,
               ),
+              blurRadius: 16,
+              spreadRadius: -4,
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildCircledIcon(IconData icon, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: const BoxDecoration(
-          color: Color(0xFF38354A),
-          shape: BoxShape.circle,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: busy ? null : () => _onPickTapped(pick),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  color: AppTheme.goldText.withValues(alpha: busy ? 0.65 : 1),
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: AppTheme.goldText.withValues(alpha: busy ? 0.65 : 1),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
       ),
     );
   }

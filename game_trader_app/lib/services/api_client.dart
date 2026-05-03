@@ -8,15 +8,18 @@ import 'app_logger.dart';
 class ApiClient {
   ApiClient({String? baseUrl})
     : baseUrl = _normalizeBase(
-        baseUrl ??
-            const String.fromEnvironment(
-              'GAMEHUB_BASE_URL',
-              defaultValue: 'http://127.0.0.1',
-            ),
+        baseUrl ?? _resolveBaseUrl(),
       );
 
   final String baseUrl;
   final http.Client _client = http.Client();
+
+  static const String _baseUrlDefine = String.fromEnvironment(
+    'GAMEHUB_BASE_URL',
+    defaultValue: '',
+  );
+  static const String _releaseDefaultBaseUrl =
+      'https://neon-games-production.up.railway.app';
 
   Uri _buildUri(String path, [Map<String, dynamic>? query]) {
     final normalizedPath = path.startsWith('/')
@@ -172,6 +175,13 @@ class ApiClient {
       return url.substring(0, url.length - 1);
     }
     return url;
+  }
+
+  static String _resolveBaseUrl() {
+    if (_baseUrlDefine.trim().isNotEmpty) {
+      return _baseUrlDefine.trim();
+    }
+    return kReleaseMode ? _releaseDefaultBaseUrl : 'http://127.0.0.1';
   }
 
   void _logResponse(String method, Uri uri, int status, DateTime started) {

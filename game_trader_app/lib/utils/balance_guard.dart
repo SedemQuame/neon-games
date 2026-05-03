@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../app_theme.dart';
+import '../screens/deposit_screen.dart';
 import '../services/api_client.dart';
 import '../services/session_manager.dart';
-import 'format.dart';
 import '../widgets/game_message.dart';
-import '../screens/deposit_screen.dart';
+import 'format.dart';
 
 class BalanceGuard {
-  static const double _minStake = 1.0;
+  static const double minStakeUsd = 1.0;
 
   static Future<bool> ensurePlayableStake(
     BuildContext context,
@@ -23,18 +24,14 @@ class BalanceGuard {
       return false;
     }
 
-    final required = stakeUsd >= _minStake ? stakeUsd : _minStake;
+    final required = stakeUsd >= minStakeUsd ? stakeUsd : minStakeUsd;
     try {
       final balance = session.cachedBalance ?? await session.refreshBalance();
       if (balance.availableUsd < required) {
         if (!context.mounted) {
           return false;
         }
-        await _showDepositDialog(
-          context,
-          required,
-          balance.availableUsd,
-        );
+        await _showDepositDialog(context, required, balance.availableUsd);
         return false;
       }
       return true;
@@ -64,32 +61,32 @@ class BalanceGuard {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0f172a),
-        title: const Text(
+        backgroundColor: AppTheme.bgCard,
+        title: Text(
           'Add Funds',
-          style: TextStyle(color: Colors.white),
+          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+            color: AppTheme.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         content: Text(
           'You need at least ${formatCurrency(required)} to play.\n'
           'Current balance: ${formatCurrency(available)}.\n'
           'Deposit funds to continue.',
-          style: const TextStyle(color: Colors.white70),
+          style: Theme.of(
+            ctx,
+          ).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Colors.white70),
-            ),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.of(ctx).pop();
               Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const DepositScreen(),
-                ),
+                MaterialPageRoute<void>(builder: (_) => const DepositScreen()),
               );
             },
             child: const Text('Deposit Now'),

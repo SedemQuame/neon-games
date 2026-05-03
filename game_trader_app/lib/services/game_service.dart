@@ -105,6 +105,76 @@ class GameService {
     );
   }
 
+  void cashOutBet({
+    required String sessionId,
+    String? traceId,
+    double? multiplier,
+  }) {
+    final payload = <String, dynamic>{
+      'type': 'CASH_OUT_BET',
+      'sessionId': sessionId,
+    };
+    if (traceId != null && traceId.isNotEmpty) {
+      payload['traceId'] = traceId;
+    }
+    if (multiplier != null) {
+      payload['multiplier'] = multiplier;
+    }
+    safeSend(payload);
+  }
+
+  void createRoom({
+    required String gameKey,
+    bool isPublic = false,
+    int minPlayers = 2,
+    int maxPlayers = 4,
+    double stakeUsd = 1,
+  }) {
+    safeSend({
+      'type': 'CREATE_ROOM',
+      'gameKey': gameKey,
+      'visibility': isPublic ? 'PUBLIC' : 'PRIVATE',
+      'minPlayers': minPlayers,
+      'maxPlayers': maxPlayers,
+      'stakeUsd': stakeUsd,
+    });
+  }
+
+  void listPublicRooms({String? gameKey}) {
+    safeSend({
+      'type': 'LIST_PUBLIC_ROOMS',
+      if (gameKey != null && gameKey.isNotEmpty) 'gameKey': gameKey,
+    });
+  }
+
+  void joinRoom(String roomCode) {
+    safeSend({'type': 'JOIN_ROOM', 'roomCode': roomCode});
+  }
+
+  void leaveRoom() {
+    safeSend({'type': 'LEAVE_ROOM'});
+  }
+
+  void setRoomReady(bool ready) {
+    safeSend({'type': 'SET_ROOM_READY', 'ready': ready});
+  }
+
+  void startRoomRound() {
+    safeSend({'type': 'START_ROOM_ROUND'});
+  }
+
+  void submitRoomAction(Map<String, dynamic> action) {
+    safeSend({'type': 'SUBMIT_ROOM_ACTION', 'action': action});
+  }
+
+  void inviteToRoom(String targetUserId) {
+    safeSend({'type': 'INVITE_TO_ROOM', 'targetUserId': targetUserId});
+  }
+
+  void kickRoomPlayer(String targetUserId) {
+    safeSend({'type': 'KICK_ROOM_PLAYER', 'targetUserId': targetUserId});
+  }
+
   void _startPing() {
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
@@ -209,8 +279,86 @@ class GameService {
           AppLogger.instance.log(
             'ws',
             '[${result.traceId}] result ${result.outcome} stake=${result.stakeUsd} '
-            'payout=${result.payoutUsd} win=${result.winAmountUsd}',
+                'payout=${result.payoutUsd} win=${result.winAmountUsd}',
           );
+          emitEvent = true;
+          break;
+        case 'ROOM_CREATED':
+          final payload =
+              decoded['payload'] as Map<String, dynamic>? ?? const {};
+          event = RoomCreatedEvent(RoomStateSnapshot.fromJson(payload));
+          emitEvent = true;
+          break;
+        case 'ROOM_STATE':
+          final payload =
+              decoded['payload'] as Map<String, dynamic>? ?? const {};
+          event = RoomStateEvent(RoomStateSnapshot.fromJson(payload));
+          emitEvent = true;
+          break;
+        case 'ROOM_LIST':
+          final payload =
+              decoded['payload'] as Map<String, dynamic>? ?? const {};
+          final items = (payload['rooms'] as List? ?? const [])
+              .whereType<Map>()
+              .map((item) => RoomSummary.fromJson(item.cast<String, dynamic>()))
+              .toList();
+          event = RoomListEvent(items);
+          emitEvent = true;
+          break;
+        case 'ROOM_INVITE':
+          final payload =
+              decoded['payload'] as Map<String, dynamic>? ?? const {};
+          final roomRaw = payload['room'] as Map<String, dynamic>? ?? const {};
+          event = RoomInviteEvent(
+            room: RoomSummary.fromJson(roomRaw),
+            fromUserId: payload['fromUserId']?.toString() ?? '',
+            fromUserName: payload['fromUserName']?.toString() ?? '',
+          );
+          emitEvent = true;
+          break;
+        case 'ROOM_ROUND_STARTED':
+          final payload =
+              decoded['payload'] as Map<String, dynamic>? ?? const {};
+          event = RoomRoundStartedEvent(
+            RoomRoundStartedPayload.fromJson(payload),
+          );
+          emitEvent = true;
+          break;
+        case 'ROOM_ROUND_RESULT':
+          final payload =
+              decoded['payload'] as Map<String, dynamic>? ?? const {};
+          event = RoomRoundResultEvent(
+            RoomRoundResultPayload.fromJson(payload),
+          );
+          emitEvent = true;
+          break;
+        case 'ROOM_LEFT':
+          event = const RoomInfoEvent('LEFT_ROOM');
+          emitEvent = true;
+          break;
+        case 'ROOM_INVITE_SENT':
+          event = const RoomInfoEvent('INVITE_SENT');
+          emitEvent = true;
+          break;
+        case 'ROOM_PLAYER_KICKED':
+          event = const RoomInfoEvent('PLAYER_KICKED');
+          emitEvent = true;
+          break;
+        case 'ROOM_KICKED':
+          final payload =
+              decoded['payload'] as Map<String, dynamic>? ?? const {};
+          event = RoomKickedEvent(
+            roomCode: payload['roomCode']?.toString() ?? '',
+            gameKey: payload['gameKey']?.toString() ?? '',
+            message:
+                payload['message']?.toString() ??
+                'You were removed from the room',
+          );
+          emitEvent = true;
+          break;
+        case 'ROOM_ERROR':
+          final message = decoded['message']?.toString() ?? 'Room error';
+          event = RoomErrorEvent(message);
           emitEvent = true;
           break;
         case 'ERROR':
@@ -338,4 +486,369 @@ class GameSocketException implements Exception {
 
   @override
   String toString() => 'GameSocketException: $message';
+}
+
+class RoomPlayerSnapshot {
+  const RoomPlayerSnapshot({
+    required this.userId,
+    required this.displayName,
+    required this.ready,
+    this.joinedAt,
+  });
+
+  final String userId;
+  final String displayName;
+  final bool ready;
+  final DateTime? joinedAt;
+
+  factory RoomPlayerSnapshot.fromJson(Map<String, dynamic> json) {
+    return RoomPlayerSnapshot(
+      userId: json['userId']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
+      ready: json['ready'] == true,
+      joinedAt: json['joinedAt'] != null
+          ? DateTime.tryParse(json['joinedAt'].toString())
+          : null,
+    );
+  }
+}
+
+class RoomStateSnapshot {
+  const RoomStateSnapshot({
+    required this.roomCode,
+    required this.gameKey,
+    required this.visibility,
+    required this.hostUserId,
+    required this.minPlayers,
+    required this.maxPlayers,
+    required this.stakeUsd,
+    required this.state,
+    required this.players,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String roomCode;
+  final String gameKey;
+  final String visibility;
+  final String hostUserId;
+  final int minPlayers;
+  final int maxPlayers;
+  final double stakeUsd;
+  final String state;
+  final List<RoomPlayerSnapshot> players;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  bool get isPublic => visibility.toUpperCase() == 'PUBLIC';
+  bool get inRound => state.toUpperCase() == 'IN_ROUND';
+
+  factory RoomStateSnapshot.fromJson(Map<String, dynamic> json) {
+    return RoomStateSnapshot(
+      roomCode: json['roomCode']?.toString() ?? '',
+      gameKey: json['gameKey']?.toString() ?? '',
+      visibility: json['visibility']?.toString() ?? 'PRIVATE',
+      hostUserId: json['hostUserId']?.toString() ?? '',
+      minPlayers: (json['minPlayers'] as num?)?.toInt() ?? 2,
+      maxPlayers: (json['maxPlayers'] as num?)?.toInt() ?? 4,
+      stakeUsd: (json['stakeUsd'] as num?)?.toDouble() ?? 1,
+      state: json['state']?.toString() ?? 'WAITING',
+      players: (json['players'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => RoomPlayerSnapshot.fromJson(item.cast<String, dynamic>()),
+          )
+          .toList(),
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'].toString())
+          : null,
+    );
+  }
+}
+
+class RoomSummary {
+  const RoomSummary({
+    required this.roomCode,
+    required this.gameKey,
+    required this.hostUserId,
+    required this.hostDisplayName,
+    required this.playerCount,
+    required this.minPlayers,
+    required this.maxPlayers,
+    required this.stakeUsd,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  final String roomCode;
+  final String gameKey;
+  final String hostUserId;
+  final String hostDisplayName;
+  final int playerCount;
+  final int minPlayers;
+  final int maxPlayers;
+  final double stakeUsd;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  factory RoomSummary.fromJson(Map<String, dynamic> json) {
+    return RoomSummary(
+      roomCode: json['roomCode']?.toString() ?? '',
+      gameKey: json['gameKey']?.toString() ?? '',
+      hostUserId: json['hostUserId']?.toString() ?? '',
+      hostDisplayName: json['hostDisplayName']?.toString() ?? '',
+      playerCount: (json['playerCount'] as num?)?.toInt() ?? 0,
+      minPlayers: (json['minPlayers'] as num?)?.toInt() ?? 2,
+      maxPlayers: (json['maxPlayers'] as num?)?.toInt() ?? 4,
+      stakeUsd: (json['stakeUsd'] as num?)?.toDouble() ?? 1,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'].toString())
+          : null,
+    );
+  }
+}
+
+class RoomRoundStartedPayload {
+  const RoomRoundStartedPayload({
+    required this.roomCode,
+    required this.roundId,
+    required this.gameKey,
+    required this.requiresAction,
+    required this.actionHint,
+    required this.actionCount,
+    required this.playerCount,
+    required this.stakeUsd,
+    required this.potUsd,
+    required this.commissionUsd,
+    required this.distributableUsd,
+    required this.choices,
+    this.startedAt,
+  });
+
+  final String roomCode;
+  final String roundId;
+  final String gameKey;
+  final bool requiresAction;
+  final String actionHint;
+  final int actionCount;
+  final int playerCount;
+  final double stakeUsd;
+  final double potUsd;
+  final double commissionUsd;
+  final double distributableUsd;
+  final List<RoomPlayerChoice> choices;
+  final DateTime? startedAt;
+
+  factory RoomRoundStartedPayload.fromJson(Map<String, dynamic> json) {
+    return RoomRoundStartedPayload(
+      roomCode: json['roomCode']?.toString() ?? '',
+      roundId: json['roundId']?.toString() ?? '',
+      gameKey: json['gameKey']?.toString() ?? '',
+      requiresAction: json['requiresAction'] == true,
+      actionHint: json['actionHint']?.toString() ?? '',
+      actionCount: (json['actionCount'] as num?)?.toInt() ?? 0,
+      playerCount: (json['playerCount'] as num?)?.toInt() ?? 0,
+      stakeUsd: (json['stakeUsd'] as num?)?.toDouble() ?? 0,
+      potUsd: (json['potUsd'] as num?)?.toDouble() ?? 0,
+      commissionUsd: (json['commissionUsd'] as num?)?.toDouble() ?? 0,
+      distributableUsd: (json['distributableUsd'] as num?)?.toDouble() ?? 0,
+      choices: (json['choices'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => RoomPlayerChoice.fromJson(item.cast<String, dynamic>()),
+          )
+          .toList(),
+      startedAt: json['startedAt'] != null
+          ? DateTime.tryParse(json['startedAt'].toString())
+          : null,
+    );
+  }
+}
+
+class RoomPlayerChoice {
+  const RoomPlayerChoice({
+    required this.userId,
+    required this.displayName,
+    required this.submitted,
+    required this.revealed,
+    required this.choice,
+  });
+
+  final String userId;
+  final String displayName;
+  final bool submitted;
+  final bool revealed;
+  final String choice;
+
+  factory RoomPlayerChoice.fromJson(Map<String, dynamic> json) {
+    return RoomPlayerChoice(
+      userId: json['userId']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
+      submitted: json['submitted'] == true,
+      revealed: json['revealed'] == true,
+      choice: json['choice']?.toString() ?? '',
+    );
+  }
+}
+
+class RoomWinnerPayout {
+  const RoomWinnerPayout({
+    required this.userId,
+    required this.displayName,
+    required this.payoutUsd,
+    required this.newBalance,
+  });
+
+  final String userId;
+  final String displayName;
+  final double payoutUsd;
+  final double newBalance;
+
+  factory RoomWinnerPayout.fromJson(Map<String, dynamic> json) {
+    return RoomWinnerPayout(
+      userId: json['userId']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
+      payoutUsd: (json['payoutUsd'] as num?)?.toDouble() ?? 0,
+      newBalance: (json['newBalance'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+class RoomRoundResultPayload {
+  const RoomRoundResultPayload({
+    required this.roomCode,
+    required this.roundId,
+    required this.gameKey,
+    required this.stakeUsd,
+    required this.potUsd,
+    required this.commissionUsd,
+    required this.distributableUsd,
+    required this.payoutPerWinnerUsd,
+    required this.winnerUserIds,
+    required this.winners,
+    required this.summary,
+    required this.detail,
+    required this.choices,
+    required this.participantCount,
+    required this.platformCutPercent,
+    this.completedAt,
+  });
+
+  final String roomCode;
+  final String roundId;
+  final String gameKey;
+  final double stakeUsd;
+  final double potUsd;
+  final double commissionUsd;
+  final double distributableUsd;
+  final double payoutPerWinnerUsd;
+  final List<String> winnerUserIds;
+  final List<RoomWinnerPayout> winners;
+  final String summary;
+  final Map<String, dynamic> detail;
+  final List<RoomPlayerChoice> choices;
+  final int participantCount;
+  final double platformCutPercent;
+  final DateTime? completedAt;
+
+  factory RoomRoundResultPayload.fromJson(Map<String, dynamic> json) {
+    return RoomRoundResultPayload(
+      roomCode: json['roomCode']?.toString() ?? '',
+      roundId: json['roundId']?.toString() ?? '',
+      gameKey: json['gameKey']?.toString() ?? '',
+      stakeUsd: (json['stakeUsd'] as num?)?.toDouble() ?? 0,
+      potUsd: (json['potUsd'] as num?)?.toDouble() ?? 0,
+      commissionUsd: (json['commissionUsd'] as num?)?.toDouble() ?? 0,
+      distributableUsd: (json['distributableUsd'] as num?)?.toDouble() ?? 0,
+      payoutPerWinnerUsd: (json['payoutPerWinnerUsd'] as num?)?.toDouble() ?? 0,
+      winnerUserIds: (json['winnerUserIds'] as List? ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+      winners: (json['winners'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => RoomWinnerPayout.fromJson(item.cast<String, dynamic>()),
+          )
+          .toList(),
+      summary: json['summary']?.toString() ?? '',
+      detail: (json['detail'] as Map?)?.cast<String, dynamic>() ?? const {},
+      choices: (json['choices'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => RoomPlayerChoice.fromJson(item.cast<String, dynamic>()),
+          )
+          .toList(),
+      participantCount: (json['participantCount'] as num?)?.toInt() ?? 0,
+      platformCutPercent:
+          (json['platformCutPercent'] as num?)?.toDouble() ?? 15,
+      completedAt: json['completedAt'] != null
+          ? DateTime.tryParse(json['completedAt'].toString())
+          : null,
+    );
+  }
+}
+
+class RoomCreatedEvent extends GameEvent {
+  const RoomCreatedEvent(this.room) : super('ROOM_CREATED');
+  final RoomStateSnapshot room;
+}
+
+class RoomStateEvent extends GameEvent {
+  const RoomStateEvent(this.room) : super('ROOM_STATE');
+  final RoomStateSnapshot room;
+}
+
+class RoomListEvent extends GameEvent {
+  const RoomListEvent(this.rooms) : super('ROOM_LIST');
+  final List<RoomSummary> rooms;
+}
+
+class RoomInviteEvent extends GameEvent {
+  const RoomInviteEvent({
+    required this.room,
+    required this.fromUserId,
+    required this.fromUserName,
+  }) : super('ROOM_INVITE');
+
+  final RoomSummary room;
+  final String fromUserId;
+  final String fromUserName;
+}
+
+class RoomRoundStartedEvent extends GameEvent {
+  const RoomRoundStartedEvent(this.payload) : super('ROOM_ROUND_STARTED');
+  final RoomRoundStartedPayload payload;
+}
+
+class RoomRoundResultEvent extends GameEvent {
+  const RoomRoundResultEvent(this.payload) : super('ROOM_ROUND_RESULT');
+  final RoomRoundResultPayload payload;
+}
+
+class RoomErrorEvent extends GameEvent {
+  const RoomErrorEvent(this.message) : super('ROOM_ERROR');
+  final String message;
+}
+
+class RoomKickedEvent extends GameEvent {
+  const RoomKickedEvent({
+    required this.roomCode,
+    required this.gameKey,
+    required this.message,
+  }) : super('ROOM_KICKED');
+
+  final String roomCode;
+  final String gameKey;
+  final String message;
+}
+
+class RoomInfoEvent extends GameEvent {
+  const RoomInfoEvent(this.code) : super('ROOM_INFO');
+  final String code;
 }

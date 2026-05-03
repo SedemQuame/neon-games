@@ -4,11 +4,16 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../app_theme.dart';
 import '../../services/game_service.dart';
 import '../../services/session_manager.dart';
 import '../../utils/balance_guard.dart';
+import '../../utils/play_mode.dart';
+import '../../widgets/game_activity_app_bar.dart';
 import '../../widgets/game_message.dart';
-import '../../widgets/wallet_balance_chip.dart';
+import '../../widgets/play_mode_toggle.dart';
+import '../../widgets/press_scale.dart';
+import '../../widgets/stake_adjuster.dart';
 
 class NeonPerimeterScreen extends StatefulWidget {
   const NeonPerimeterScreen({super.key});
@@ -30,8 +35,8 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
   bool _lastTargetOutside = false;
   bool _isPlaying = false;
 
-  String _status = 'Choose IN or OUT to begin';
-  double _stakeUsd = 5;
+  double _stakeUsd = BalanceGuard.minStakeUsd;
+  PlayMode _playMode = PlayMode.demo;
   String? _activeSessionId;
   String? _activeTraceId;
   StreamSubscription<GameEvent>? _gameSubscription;
@@ -76,16 +81,6 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
   }
 
   Future<void> _placeBet() async {
-    final session = context.read<SessionManager>();
-    if (!session.isAuthenticated) {
-      if (!mounted) return;
-      showGameMessage(context, 'Please log in to place a bet.');
-      return;
-    }
-    final canPlay = await BalanceGuard.ensurePlayableStake(context, _stakeUsd);
-    if (!canPlay) return;
-
-    await _ensureSocket();
     final prediction = {
       'direction': _selectedTabIndex == 0 ? 'IN' : 'OUT',
       'symbol': 'R_50',
@@ -99,28 +94,59 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
       'barrierLow': -0.0015,
     };
 
+    if (_playMode.isDemo) {
+      _startAnimation();
+      showGameMessage(context, 'Demo range. Wallet unchanged.');
+      await Future<void>.delayed(const Duration(milliseconds: 1400));
+      if (!mounted || !_isPlaying) return;
+      _stopAnimation();
+      _showResultDialog(
+        buildDemoGameResult(
+          gameType: 'NEON_PERIMETER',
+          stakeUsd: _stakeUsd,
+          payoutMultiplier: 1.85,
+          winChance: 0.48,
+          rng: _rng,
+        ),
+      );
+      return;
+    }
+
+    final session = context.read<SessionManager>();
+    if (!session.isAuthenticated) {
+      if (!mounted) return;
+      showGameMessage(context, 'Please log in to place a bet.');
+      return;
+    }
+    final canPlay = await ensureStakeForPlayMode(context, _playMode, _stakeUsd);
+    if (!canPlay) return;
+
+    await _ensureSocket();
+
     try {
-      setState(() => _status = 'Submitting bet...');
       final ack = await session.gameService.placeBet(
         gameType: 'NEON_PERIMETER',
         stakeUsd: _stakeUsd,
         prediction: prediction,
       );
       setState(() {
-        _status = 'Listening for a response...';
         _activeSessionId = ack.sessionId;
         _activeTraceId = ack.traceId;
       });
       _startAnimation();
     } on GameSocketException catch (err) {
       if (!mounted) return;
-      setState(() => _status = err.message);
       showGameMessage(context, err.message);
     } catch (err) {
       if (!mounted) return;
-      setState(() => _status = 'Bet failed');
       showGameMessage(context, 'Bet failed: $err');
     }
+  }
+
+  Future<void> _placeBetForDirection(int directionIndex) async {
+    if (_isPlaying) return;
+    setState(() => _selectedTabIndex = directionIndex);
+    await _placeBet();
   }
 
   void _startAnimation() {
@@ -136,11 +162,7 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
   void _handleGameEvent(GameEvent event) {
     if (!mounted) return;
     if (event is GameResultEvent && event.sessionId == _activeSessionId) {
-      final win = event.outcome.toUpperCase() == 'WIN';
       setState(() {
-        _status = win
-            ? 'IN zone held steady! +\$${event.winAmountUsd.toStringAsFixed(2)}'
-            : 'Round ended ${event.outcome}.';
         _activeSessionId = null;
         _activeTraceId = null;
       });
@@ -148,13 +170,11 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
       _showResultDialog(event);
     } else if (event is GameBetRejected && event.traceId == _activeTraceId) {
       setState(() {
-        _status = 'Bet rejected: ${event.reason}';
         _activeTraceId = null;
       });
       _stopAnimation();
       showGameMessage(context, 'Bet rejected: ${event.reason}');
     } else if (event is GameErrorEvent) {
-      setState(() => _status = event.message);
       _stopAnimation();
     }
   }
@@ -164,7 +184,7 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF151b24),
+        backgroundColor: AppTheme.gameSurface,
         title: Text(
           win ? 'Result: IN' : 'Result: ${event.outcome}',
           style: TextStyle(color: win ? Colors.greenAccent : Colors.redAccent),
@@ -173,12 +193,15 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
           win
               ? 'Winnings: \$${event.winAmountUsd.toStringAsFixed(2)}'
               : 'No payout this round.',
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: AppTheme.textPrimary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(color: Colors.blueAccent)),
+            child: const Text(
+              'OK',
+              style: TextStyle(color: AppTheme.goldButtonBottom),
+            ),
           ),
         ],
       ),
@@ -188,68 +211,8 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF10151c), // Very dark background
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(60),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
-            ),
-          ),
-          child: AppBar(
-            backgroundColor: const Color(0xFF10151c),
-            elevation: 0,
-            leadingWidth: 80,
-            leading: GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Container(
-                margin: const EdgeInsets.only(left: 16, top: 12, bottom: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1e293b),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.arrow_back_ios_new,
-                  size: 16,
-                  color: Colors.blueAccent,
-                ),
-              ),
-            ),
-            title: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.grid_view, size: 20, color: Colors.blueAccent),
-                SizedBox(width: 8),
-                Text(
-                  'KINETIC ARCADE',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14,
-                    color: Colors.white,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              const WalletBalanceChip(
-                margin: EdgeInsets.only(right: 12),
-                backgroundColor: Color(0xFF11213b),
-                borderColor: Color(0xFF1e3a8a),
-                iconColor: Colors.blueAccent,
-                textColor: Colors.blueAccent,
-              ),
-              const CircleAvatar(
-                radius: 14,
-                backgroundColor: Color(0xFF1e293b),
-                child: Icon(Icons.person, size: 18, color: Colors.white70),
-              ),
-              const SizedBox(width: 16),
-            ],
-          ),
-        ),
-      ),
+      backgroundColor: AppTheme.gameBackground,
+      appBar: const GameActivityAppBar(title: 'Neon Perimeter'),
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -266,7 +229,7 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
                       const Text(
                         'Neon Perimeter',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppTheme.textPrimary,
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                         ),
@@ -275,7 +238,7 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
                       Text(
                         'Target: Range / OneTouch',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.4),
+                          color: AppTheme.textSecondary,
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
@@ -288,7 +251,7 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
                       Text(
                         'STATUS',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.4),
+                          color: AppTheme.textSecondary,
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 1.0,
@@ -329,92 +292,15 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
               ),
             ),
 
-            // Tabs
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1e293b),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          if (!_isPlaying) {
-                            setState(() => _selectedTabIndex = 0);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          decoration: BoxDecoration(
-                            color: _selectedTabIndex == 0
-                                ? Colors.blueAccent
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'IN',
-                            style: TextStyle(
-                              color: _selectedTabIndex == 0
-                                  ? Colors.white
-                                  : Colors.white54,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 13,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          if (!_isPlaying) {
-                            setState(() => _selectedTabIndex = 1);
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          decoration: BoxDecoration(
-                            color: _selectedTabIndex == 1
-                                ? Colors.blueAccent
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'OUT',
-                            style: TextStyle(
-                              color: _selectedTabIndex == 1
-                                  ? Colors.white
-                                  : Colors.white54,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 13,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
             // The Main Perimeter Visual
             Padding(
               padding: const EdgeInsets.all(20),
               child: Container(
                 height: 320,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF151b24),
+                  color: AppTheme.gameSurface,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.05),
-                  ),
+                  border: Border.all(color: AppTheme.gameBorder),
                   boxShadow: [
                     // slight shadow
                     BoxShadow(
@@ -586,184 +472,87 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
               ),
             ),
 
-            // Bottom Info Cards
+            // Bottom Info + Stake
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.gameSurface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.gameBorder),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'WINDOW',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '$_durationMinutes min (auto)',
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Window is fixed for this mode.',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: StakeAdjuster(
+                label: 'STAKE',
+                value: _stakeUsd,
+                enabled: !_isPlaying,
+                onChanged: (next) => setState(() => _stakeUsd = next),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: PlayModeToggle(
+                value: _playMode,
+                enabled: !_isPlaying,
+                onChanged: (mode) => setState(() => _playMode = mode),
+              ),
+            ),
+            const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF151b24),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.05),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'WINDOW',
-                            style: TextStyle(
-                              color: Colors.white54,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '$_durationMinutes min (auto)',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Window is fixed for this mode.',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: _buildDirectionButton(
+                      label: 'IN',
+                      selected: _selectedTabIndex == 0,
+                      onTap: () => _placeBetForDirection(0),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF151b24),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.05),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'STAKE (USD)',
-                            style: TextStyle(
-                              color: Colors.white54,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.0,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '\$${_stakeUsd.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+                    child: _buildDirectionButton(
+                      label: 'OUT',
+                      selected: _selectedTabIndex == 1,
+                      onTap: () => _placeBetForDirection(1),
                     ),
                   ),
                 ],
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Slider(
-                    min: 1,
-                    max: 100,
-                    divisions: 99,
-                    value: _stakeUsd,
-                    activeColor: Colors.blueAccent,
-                    onChanged: (value) {
-                      if (_isPlaying) return;
-                      setState(() => _stakeUsd = value);
-                    },
-                  ),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF111827),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _status,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // START PULSE Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SizedBox(
-                width: double.infinity,
-                height: 60,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _isPlaying
-                            ? Colors.transparent
-                            : Colors.blueAccent.withValues(alpha: 0.3),
-                        blurRadius: 15,
-                        spreadRadius: -2,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isPlaying
-                          ? Colors.blueGrey
-                          : Colors.blueAccent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                    onPressed: _isPlaying ? null : _placeBet,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          _isPlaying ? Icons.hourglass_empty : Icons.bolt,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _isPlaying ? 'WAITING...' : 'ENGAGE MISSION',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2.0,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               ),
             ),
 
@@ -822,6 +611,65 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
       _isPlaying = false;
     });
     _pulseController.stop();
+  }
+
+  Widget _buildDirectionButton({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final disabled = _isPlaying;
+    return PressScale(
+      enabled: !disabled,
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: disabled
+                ? const [AppTheme.goldDisabledTop, AppTheme.goldDisabledBottom]
+                : const [AppTheme.goldButtonTop, AppTheme.goldButtonBottom],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppTheme.goldButtonBottom.withValues(
+              alpha: disabled ? 0.4 : 0.9,
+            ),
+            width: selected ? 1.8 : 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.goldButtonBottom.withValues(
+                alpha: disabled ? 0.08 : 0.24,
+              ),
+              blurRadius: 14,
+              spreadRadius: -4,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: disabled ? null : onTap,
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: AppTheme.goldText.withValues(
+                    alpha: disabled ? 0.65 : 1,
+                  ),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildGlowingDot() {

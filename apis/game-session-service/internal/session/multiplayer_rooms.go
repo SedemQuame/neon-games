@@ -124,18 +124,27 @@ type RoomSummary struct {
 }
 
 type RoomRoundStartedPayload struct {
-	RoomCode         string    `json:"roomCode"`
-	RoundID          string    `json:"roundId"`
-	GameKey          string    `json:"gameKey"`
-	RequiresAction   bool      `json:"requiresAction"`
-	ActionHint       string    `json:"actionHint"`
-	ActionCount      int       `json:"actionCount"`
-	PlayerCount      int       `json:"playerCount"`
-	StakeUsd         float64   `json:"stakeUsd"`
-	PotUsd           float64   `json:"potUsd"`
-	CommissionUsd    float64   `json:"commissionUsd"`
-	DistributableUsd float64   `json:"distributableUsd"`
-	StartedAt        time.Time `json:"startedAt"`
+	RoomCode         string             `json:"roomCode"`
+	RoundID          string             `json:"roundId"`
+	GameKey          string             `json:"gameKey"`
+	RequiresAction   bool               `json:"requiresAction"`
+	ActionHint       string             `json:"actionHint"`
+	ActionCount      int                `json:"actionCount"`
+	PlayerCount      int                `json:"playerCount"`
+	StakeUsd         float64            `json:"stakeUsd"`
+	PotUsd           float64            `json:"potUsd"`
+	CommissionUsd    float64            `json:"commissionUsd"`
+	DistributableUsd float64            `json:"distributableUsd"`
+	Choices          []RoomPlayerChoice `json:"choices"`
+	StartedAt        time.Time          `json:"startedAt"`
+}
+
+type RoomPlayerChoice struct {
+	UserID      string `json:"userId"`
+	DisplayName string `json:"displayName"`
+	Submitted   bool   `json:"submitted"`
+	Revealed    bool   `json:"revealed"`
+	Choice      string `json:"choice"`
 }
 
 type RoomWinnerPayout struct {
@@ -158,6 +167,7 @@ type RoomRoundResultPayload struct {
 	Winners            []RoomWinnerPayout     `json:"winners"`
 	Summary            string                 `json:"summary"`
 	Detail             map[string]interface{} `json:"detail"`
+	Choices            []RoomPlayerChoice     `json:"choices"`
 	CompletedAt        time.Time              `json:"completedAt"`
 	ParticipantCount   int                    `json:"participantCount"`
 	PlatformCutPercent float64                `json:"platformCutPercent"`
@@ -719,6 +729,7 @@ func (m *Manager) StartRoomRound(ctx context.Context, userID string) (*RoomRound
 		PotUsd:           pot,
 		CommissionUsd:    commission,
 		DistributableUsd: distributable,
+		Choices:          roomRoundChoices(gameKey, participants, map[string]map[string]interface{}{}),
 		StartedAt:        time.Now().UTC(),
 	}
 
@@ -795,6 +806,7 @@ func (m *Manager) SubmitRoomAction(ctx context.Context, userID string, req Submi
 		PotUsd:           pot,
 		CommissionUsd:    commission,
 		DistributableUsd: distributable,
+		Choices:          roomRoundChoices(round.GameKey, round.Participants, round.Actions),
 		StartedAt:        round.StartedAt,
 	}
 	memberIDs := room.memberIDs()
@@ -849,6 +861,7 @@ func (m *Manager) ResolveRoomRound(ctx context.Context, roomCode, roundID string
 	m.roomsMu.Unlock()
 
 	winnerIDs, summary, detail := evaluateRound(gameKey, participants, actions, target)
+	choices := roomResultChoices(gameKey, participants, actions, detail)
 	allowNoWinners := false
 	if raw, ok := detail["noWinners"].(bool); ok && raw {
 		allowNoWinners = true
@@ -940,6 +953,7 @@ func (m *Manager) ResolveRoomRound(ctx context.Context, roomCode, roundID string
 		Winners:            winners,
 		Summary:            summary,
 		Detail:             detail,
+		Choices:            choices,
 		CompletedAt:        time.Now().UTC(),
 		ParticipantCount:   len(participants),
 		PlatformCutPercent: 15,
@@ -1029,6 +1043,147 @@ func normalizeAction(gameKey string, raw map[string]interface{}) (map[string]int
 		return map[string]interface{}{}, nil
 	default:
 		return nil, errInvalidRoomGame
+	}
+}
+
+func roomRoundChoices(gameKey string, participants map[string]*roundParticipant, actions map[string]map[string]interface{}) []RoomPlayerChoice {
+	choices := make([]RoomPlayerChoice, 0, len(participants))
+	for _, participant := range participants {
+		if participant == nil {
+			continue
+		}
+		choice := RoomPlayerChoice{
+			UserID:      participant.UserID,
+			DisplayName: participant.DisplayName,
+			Choice:      "Waiting",
+		}
+		if !requiresAction(gameKey) {
+			choice.Submitted = true
+			choice.Revealed = true
+			choice.Choice = "Auto"
+		} else if action, ok := actions[participant.UserID]; ok {
+			choice.Submitted = true
+			choice.Revealed = true
+			choice.Choice = actionChoiceLabel(gameKey, action)
+		}
+		choices = append(choices, choice)
+	}
+	sort.Slice(choices, func(i, j int) bool {
+		return choices[i].DisplayName < choices[j].DisplayName
+	})
+	return choices
+}
+
+func roomResultChoices(
+	gameKey string,
+	participants []*roundParticipant,
+	actions map[string]map[string]interface{},
+	detail map[string]interface{},
+) []RoomPlayerChoice {
+	choices := make([]RoomPlayerChoice, 0, len(participants))
+	for _, participant := range participants {
+		if participant == nil {
+			continue
+		}
+		label := resultChoiceLabel(gameKey, participant.UserID, actions, detail)
+		choices = append(choices, RoomPlayerChoice{
+			UserID:      participant.UserID,
+			DisplayName: participant.DisplayName,
+			Submitted:   true,
+			Revealed:    true,
+			Choice:      label,
+		})
+	}
+	sort.Slice(choices, func(i, j int) bool {
+		return choices[i].DisplayName < choices[j].DisplayName
+	})
+	return choices
+}
+
+func resultChoiceLabel(gameKey, userID string, actions map[string]map[string]interface{}, detail map[string]interface{}) string {
+	switch gameKey {
+	case "RPS_CLASH":
+		return labelFromDetailMap(detail, "picks", userID, "ROCK")
+	case "DICE_DUEL":
+		return "Roll " + labelFromDetailMap(detail, "rolls", userID, "0")
+	case "TARGET_STRIKE":
+		return "Number " + labelFromDetailMap(detail, "picks", userID, "0")
+	case "HIGH_CARD":
+		return "Card " + labelFromDetailMap(detail, "cards", userID, "0")
+	case "PARITY_CLASH":
+		return "Digit " + labelFromDetailMap(detail, "digits", userID, "0")
+	case "COIN_TOSS":
+		return labelFromDetailMap(detail, "picks", userID, "HEADS")
+	case "TREASURE_BOX":
+		return "Box " + labelFromDetailMap(detail, "boxes", userID, "1")
+	case "SECRET_BID":
+		return "Bid " + labelFromDetailMap(detail, "bids", userID, "1")
+	case "SPIN_BOTTLE":
+		return labelFromDetailMap(detail, "picks", userID, "LEFT")
+	case "LOOT_BOX_POOL":
+		return "Box " + labelFromDetailMap(detail, "boxPicks", userID, "1")
+	default:
+		if action, ok := actions[userID]; ok {
+			return actionChoiceLabel(gameKey, action)
+		}
+		return "Auto"
+	}
+}
+
+func labelFromDetailMap(detail map[string]interface{}, key, userID, fallback string) string {
+	value, ok := valueFromDetailMap(detail, key, userID)
+	if !ok {
+		return fallback
+	}
+	return strings.TrimSpace(fmt.Sprintf("%v", value))
+}
+
+func valueFromDetailMap(detail map[string]interface{}, key, userID string) (interface{}, bool) {
+	if detail == nil {
+		return nil, false
+	}
+	raw, ok := detail[key]
+	if !ok {
+		return nil, false
+	}
+	switch values := raw.(type) {
+	case map[string]interface{}:
+		v, exists := values[userID]
+		return v, exists
+	case map[string]string:
+		v, exists := values[userID]
+		return v, exists
+	case map[string]int:
+		v, exists := values[userID]
+		return v, exists
+	case map[string]float64:
+		v, exists := values[userID]
+		return v, exists
+	default:
+		return nil, false
+	}
+}
+
+func actionChoiceLabel(gameKey string, action map[string]interface{}) string {
+	switch gameKey {
+	case "RPS_CLASH":
+		return strings.ToUpper(strings.TrimSpace(fmt.Sprintf("%v", action["pick"])))
+	case "TARGET_STRIKE":
+		return fmt.Sprintf("Number %v", action["number"])
+	case "PARITY_CLASH":
+		return fmt.Sprintf("Digit %v", action["digit"])
+	case "COIN_TOSS":
+		return strings.ToUpper(strings.TrimSpace(fmt.Sprintf("%v", action["side"])))
+	case "TREASURE_BOX":
+		return fmt.Sprintf("Box %v", action["box"])
+	case "SECRET_BID":
+		return fmt.Sprintf("Bid %v", action["bid"])
+	case "SPIN_BOTTLE":
+		return strings.ToUpper(strings.TrimSpace(fmt.Sprintf("%v", action["side"])))
+	case "LOOT_BOX_POOL":
+		return fmt.Sprintf("Box %v", action["box"])
+	default:
+		return "Auto"
 	}
 }
 

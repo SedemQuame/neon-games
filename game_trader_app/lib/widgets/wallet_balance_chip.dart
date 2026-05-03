@@ -11,25 +11,41 @@ class WalletBalanceChip extends StatelessWidget {
     this.margin,
     this.backgroundColor,
     this.borderColor,
-    this.iconColor = const Color(0xFF94a3b8),
-    this.textColor = Colors.white,
+    this.iconColor,
+    this.textColor,
   });
 
   final EdgeInsetsGeometry? margin;
   final Color? backgroundColor;
   final Color? borderColor;
-  final Color iconColor;
-  final Color textColor;
+  final Color? iconColor;
+  final Color? textColor;
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+    final useDefaultGold =
+        backgroundColor == null &&
+        borderColor == null &&
+        iconColor == null &&
+        textColor == null;
+
     return Container(
-      margin: margin ?? const EdgeInsets.only(right: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: margin ?? EdgeInsets.only(right: context.space.md),
+      padding: EdgeInsets.symmetric(
+        horizontal: context.space.md,
+        vertical: context.space.xs,
+      ),
       decoration: BoxDecoration(
-        color: backgroundColor ?? AppTheme.surfaceDark,
-        borderRadius: BorderRadius.circular(9999),
-        border: Border.all(color: borderColor ?? AppTheme.borderDark),
+        color: useDefaultGold
+            ? AppTheme.primaryColor
+            : (backgroundColor ?? colors.bgCard),
+        borderRadius: BorderRadius.circular(context.radii.pill),
+        border: Border.all(
+          color:
+              borderColor ??
+              (useDefaultGold ? AppTheme.goldButtonBottom : colors.border),
+        ),
       ),
       child: Consumer<SessionManager>(
         builder: (context, session, _) {
@@ -40,15 +56,18 @@ class WalletBalanceChip extends StatelessWidget {
               Icon(
                 Icons.account_balance_wallet,
                 size: 14,
-                color: iconColor,
+                color:
+                    iconColor ??
+                    (useDefaultGold ? AppTheme.goldText : colors.textSecondary),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: context.space.xs),
               Text(
                 formatCurrency(balance),
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  color: textColor,
+                style: context.type.label.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color:
+                      textColor ??
+                      (useDefaultGold ? AppTheme.goldText : colors.textPrimary),
                 ),
               ),
             ],

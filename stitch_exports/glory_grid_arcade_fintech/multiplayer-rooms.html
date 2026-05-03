@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-fixed-dim": "#f0c046",
+                    "surface-container": "#1c2026",
+                    "surface-bright": "#363941",
+                    "inverse-surface": "#e0e2ec",
+                    "on-surface": "#e0e2ec",
+                    "primary": "#a8c8ff",
+                    "secondary": "#f0c046",
+                    "on-tertiary": "#532200",
+                    "error": "#ffb4ab",
+                    "on-secondary": "#3f2e00",
+                    "secondary-fixed": "#ffdf9a",
+                    "primary-container": "#3691ff",
+                    "surface-tint": "#a8c8ff",
+                    "on-tertiary-container": "#481d00",
+                    "on-secondary-fixed-variant": "#5a4300",
+                    "on-tertiary-fixed": "#321200",
+                    "tertiary-container": "#e47019",
+                    "tertiary-fixed-dim": "#ffb68c",
+                    "on-surface-variant": "#c1c6d5",
+                    "secondary-container": "#b58a0b",
+                    "primary-fixed": "#d5e3ff",
+                    "on-tertiary-fixed-variant": "#753400",
+                    "on-background": "#e0e2ec",
+                    "outline-variant": "#414753",
+                    "on-primary": "#003061",
+                    "tertiary-fixed": "#ffdbc9",
+                    "surface-dim": "#10131a",
+                    "surface-container-lowest": "#0b0e15",
+                    "on-error": "#690005",
+                    "surface-container-high": "#272a31",
+                    "on-primary-container": "#002955",
+                    "surface-container-highest": "#31353c",
+                    "on-secondary-container": "#372700",
+                    "on-primary-fixed-variant": "#004689",
+                    "error-container": "#93000a",
+                    "primary-fixed-dim": "#a8c8ff",
+                    "background": "#10131a",
+                    "surface": "#10131a",
+                    "on-error-container": "#ffdad6",
+                    "surface-variant": "#31353c",
+                    "on-secondary-fixed": "#251a00",
+                    "inverse-on-surface": "#2d3038",
+                    "inverse-primary": "#005eb4",
+                    "tertiary": "#ffb68c",
+                    "on-primary-fixed": "#001b3c",
+                    "outline": "#8b919f",
+                    "surface-container-low": "#181c22"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "4px",
+                    "margin": "16px",
+                    "gutter": "12px",
+                    "xl": "32px",
+                    "sm": "8px",
+                    "md": "16px",
+                    "xs": "4px",
+                    "lg": "24px"
+            },
+            "fontFamily": {
+                    "h2": ["Plus Jakarta Sans"],
+                    "display": ["Plus Jakarta Sans"],
+                    "body-md": ["Plus Jakarta Sans"],
+                    "body-lg": ["Plus Jakarta Sans"],
+                    "h1": ["Plus Jakarta Sans"],
+                    "label-md": ["Plus Jakarta Sans"],
+                    "number-xl": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "h2": ["20px", {"lineHeight": "1.2", "fontWeight": "700"}],
+                    "display": ["32px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                    "body-md": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "1.5", "fontWeight": "500"}],
+                    "h1": ["24px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "700"}],
+                    "label-md": ["12px", {"lineHeight": "1", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                    "number-xl": ["28px", {"lineHeight": "1", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(49, 53, 60, 0.4);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md min-h-screen pb-40">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-slate-950/70 backdrop-blur-xl border-b border-white/10 px-4 h-16 flex justify-between items-center">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-primary/20">
+<img alt="User Profile" data-alt="A professional headshot of a young male gamer with subtle neon lighting reflecting on his face. The background is a dark, sophisticated arcade atmosphere with soft blue and gold highlights. The image quality is crisp and high-definition, maintaining a premium fintech-inspired aesthetic with deep shadows and clean highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjTWqTmHrI24YoFePLfr11o4UxRn3daThErvdz0-idC8_ejKmlnIVVrerBzjoCUwSDEDXlNPW8kC5RlZ37xBHlKK51eUvM-6xnGsKxnMaSjBQJwy9ksun73VINlF6ewH2K9cF2A_Nf6j-PBurP2-61vGTzExyjyEVaoaYXJiXxWFYPJih1Zn7g5J0S-sXHGPj9fzRBK4ChuO8iT3ALojpDgvKba262OWex1-frItquKy_uNC8PSID2eihuKaYoWDcmolc-TCdzppc"/>
+</div>
+<span class="font-['Plus_Jakarta_Sans'] font-black text-white italic tracking-tighter text-xl">Glory Grid</span>
+</div>
+<button class="bg-primary-container text-on-primary-container font-h2 text-sm px-4 py-2 rounded-lg active:scale-95 duration-200 shadow-lg shadow-primary-container/20">
+            $1,250.00 Deposit
+        </button>
+</header>
+<main class="mt-20 px-4 space-y-6">
+<!-- Invite Code Section -->
+<section class="space-y-3">
+<h2 class="font-h2 text-on-surface-variant px-1">Join with Code</h2>
+<div class="flex gap-2">
+<div class="relative flex-grow">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">key</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-xl py-3 pl-10 pr-4 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-body-md text-on-surface" placeholder="Enter Invite Code" type="text"/>
+</div>
+<button class="bg-surface-bright text-primary px-6 rounded-xl font-label-md border border-outline-variant active:scale-95 transition-transform">Verify</button>
+</div>
+</section>
+<!-- Filters Section -->
+<section class="space-y-4">
+<div class="flex items-center justify-between">
+<h2 class="font-h1 text-white">Active Rooms</h2>
+<button class="text-primary flex items-center gap-1 font-label-md">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                    Filter
+                </button>
+</div>
+<div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+<div class="flex-shrink-0 bg-surface-container-high border border-outline-variant px-4 py-2 rounded-full flex items-center gap-2">
+<span class="text-label-md text-on-surface-variant">Stake:</span>
+<span class="text-label-md text-white">All Amounts</span>
+<span class="material-symbols-outlined text-[16px] text-outline">expand_more</span>
+</div>
+<div class="flex-shrink-0 bg-surface-container-high border border-outline-variant px-4 py-2 rounded-full flex items-center gap-2">
+<span class="text-label-md text-on-surface-variant">Mode:</span>
+<span class="text-label-md text-white">Mega Crash</span>
+<span class="material-symbols-outlined text-[16px] text-outline">expand_more</span>
+</div>
+<div class="flex-shrink-0 bg-surface-container-high border border-outline-variant px-4 py-2 rounded-full flex items-center gap-2">
+<span class="text-label-md text-white">Public Only</span>
+</div>
+</div>
+</section>
+<!-- Rooms Grid -->
+<section class="grid grid-cols-1 gap-4">
+<!-- Room Card 1: High Stakes (Gold Highlight) -->
+<div class="glass-card rounded-2xl p-4 relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-32 h-32 bg-secondary/10 blur-3xl -mr-16 -mt-16 transition-opacity group-hover:opacity-100 opacity-50"></div>
+<div class="flex justify-between items-start mb-4">
+<div class="space-y-1">
+<div class="flex items-center gap-2">
+<span class="font-h2 text-white">Elite Titans</span>
+<span class="bg-secondary-container/30 text-secondary px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border border-secondary/20">High Roller</span>
+</div>
+<p class="font-label-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">sports_esports</span>
+                            Mega Crash
+                        </p>
+</div>
+<div class="text-right">
+<p class="font-number-xl text-secondary">$500</p>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-tighter">Stake Amount</p>
+</div>
+</div>
+<div class="flex justify-between items-center">
+<div class="flex -space-x-2">
+<img alt="p1" class="w-7 h-7 rounded-full border-2 border-surface-container-lowest" data-alt="Portrait of a young competitive player with a focused expression. High-contrast lighting highlights sharp facial features against a dark, tech-oriented studio background with deep blue and violet atmospheric tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZmLZVuOjI7qakF1YQPqag6wvlnSrQV_t7C3GrS77pXvEI7HdU6g56oREoSu9Q5-FJHEP7Kuz-fpySvGpOo78OPkibNbcv3JSwe-ibCfziHK7PtMCzLOEyRuTgVkr6x_lhMJFXOSLyWpYvs2_EeKvhes9suj-ODEY-8FXwm9PNEt1_cKW_mlW2Wmh8c8-9EgP7vk_LNItkTm7XMlMMJQdhZbQGm0kvZH1SjiK6DofP0lywaG8zxM00-DtYj30VZPtknIfxLdNUzPQ"/>
+<img alt="p2" class="w-7 h-7 rounded-full border-2 border-surface-container-lowest" data-alt="Close-up portrait of a woman laughing in a futuristic environment. The lighting is warm and golden, reflecting off high-tech surfaces. The background is a mix of blurred lights in shades of gold and deep charcoal, creating a vibrant social gaming feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0ZllBwkeajRQXqMjfz5f4dw6uySSjy60GZfptsntssRwrCeOqV9FVE70awFuwnS7sulOko85cuP6rOyK-sL1vzkfGVxVRm70xyv3V_rf9_1H-TNbwfpzFnjOEYUiAZGb3lH1f0qcOVHi-KSgqVUnNsW9ysxX567jwl_T6uIG0SffabSwoq2yDYjMZxP9QvjkHhi7mq8TUaQH1A8DHVTIDNnWT2-zPlDTvnPfyjng9G3nkYCeJLi9OoIcM395tWloysHyBUMoaIVQ"/>
+<div class="w-7 h-7 rounded-full border-2 border-surface-container-lowest bg-surface-bright flex items-center justify-center text-[10px] font-bold text-white">8/10</div>
+</div>
+<button class="bg-primary-container text-on-primary-container px-8 py-2.5 rounded-xl font-h2 text-sm shadow-lg shadow-primary-container/20 active:scale-95 transition-all">Join</button>
+</div>
+</div>
+<!-- Room Card 2: Standard -->
+<div class="glass-card rounded-2xl p-4 relative overflow-hidden group">
+<div class="flex justify-between items-start mb-4">
+<div class="space-y-1">
+<div class="flex items-center gap-2">
+<span class="font-h2 text-white">Neon Runners</span>
+<span class="bg-surface-bright text-on-surface-variant px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border border-outline-variant">Public</span>
+</div>
+<p class="font-label-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">grid_4x4</span>
+                            Glory Grid Classic
+                        </p>
+</div>
+<div class="text-right">
+<p class="font-number-xl text-primary">$25</p>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-tighter">Stake Amount</p>
+</div>
+</div>
+<div class="flex justify-between items-center">
+<div class="flex -space-x-2">
+<img alt="p3" class="w-7 h-7 rounded-full border-2 border-surface-container-lowest" data-alt="Headshot of a modern gamer with professional gear. Subtle purple and cyan rim lighting defines his profile against a dark, atmospheric gaming setup. The look is sleek, high-end, and perfectly aligned with a premium digital entertainment platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqd6byK1vKbfeqZwXSyOgr4KB-arTPsalMj5Yf3JXnzAuIcz5S9xh7NZL1FNq2QlE7IaI5bQJKbyZ6uZmZZN_86B9qpHWjN_rzThIQc9x4xPU72xvixYWshHzC_-qZoVcAFLB2q9l_n6TCzMeJqyGkOi2Tc8VKLTzzfuHeba4vuZcD1JMVAtdJ5WJjT2v5jtllCrtF6G6nEvxcL2Rcd9mTK3K2-G7oUxm7__Mw5EL1rJn2iQ8ydfUAahyVQmmaaRijlS_SaqAzgY4"/>
+<div class="w-7 h-7 rounded-full border-2 border-surface-container-lowest bg-surface-bright flex items-center justify-center text-[10px] font-bold text-white">2/4</div>
+</div>
+<button class="bg-primary-container text-on-primary-container px-8 py-2.5 rounded-xl font-h2 text-sm active:scale-95 transition-all">Join</button>
+</div>
+</div>
+<!-- Room Card 3: Casual -->
+<div class="glass-card rounded-2xl p-4 relative overflow-hidden group">
+<div class="flex justify-between items-start mb-4">
+<div class="space-y-1">
+<div class="flex items-center gap-2">
+<span class="font-h2 text-white">After Dark Squad</span>
+</div>
+<p class="font-label-md text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">rocket_launch</span>
+                            Mega Crash
+                        </p>
+</div>
+<div class="text-right">
+<p class="font-number-xl text-primary">$10</p>
+<p class="text-[10px] text-on-surface-variant uppercase font-bold tracking-tighter">Stake Amount</p>
+</div>
+</div>
+<div class="flex justify-between items-center">
+<div class="flex -space-x-2">
+<img alt="p4" class="w-7 h-7 rounded-full border-2 border-surface-container-lowest" data-alt="Detailed portrait of a digital artist in a low-light environment. The scene is illuminated by the soft glow of a screen, casting realistic blue and teal highlights onto her face. The aesthetic is sophisticated, modern, and dark-themed." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0aPAr3xu-YcZR6RhGQ4wi0q4g5glsvGGEOqmUZeZLPNNkGcLJGhum-wArmdWdSpQRkEgd2b-inch4-AMebgZZLUEMvn0tcMuALWtIuaQJB0MIoFgnYMChnTE1vIdTWHaaXYs_y6NEEuEYq7sAt_9aHkvVneSVx0MpJjYY-C7UntQ8elw66cP_N8cCUs-r8XrB2LPkb1WSSi-gXO1TPSm7-yiluSF5CEvqYraPYjBfoyyFUQM0S58XdIZzwaGORoHUGSB-0KjbyT4"/>
+<img alt="p5" class="w-7 h-7 rounded-full border-2 border-surface-container-lowest" data-alt="A portrait of a male tech professional in a sharp dark blazer. Soft, ambient studio lighting creates a premium, fintech atmosphere. Deep shadows and subtle reflections give the image a high-end feel consistent with a luxury arcade brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8HI--ju2YHqRZM6tifkS7vFL4FprfSrRwG4sBBP1UpG70GPerHArN_zvCHyXb9Nx9oTYQw3nw39ufoTXRQkY6lcEc7F5_jo9pQebK3x52ogD-iid5flVv2kNCn2dYmUnQb7osJ3cCVwtXL6redMXUm0D2rBa-hoCAeoaQhfhuXw7Na2zMmXqHzsxtpGlE-850n7sr1yOsBslYVp2GmJ7PLZO32MAR_3TbJwzJNXu9XAqApBwz0osbcEG0aHReGAdwoZSsL8Kpu-o"/>
+<div class="w-7 h-7 rounded-full border-2 border-surface-container-lowest bg-surface-bright flex items-center justify-center text-[10px] font-bold text-white">5/10</div>
+</div>
+<button class="bg-primary-container text-on-primary-container px-8 py-2.5 rounded-xl font-h2 text-sm active:scale-95 transition-all">Join</button>
+</div>
+</div>
+</section>
+</main>
+<!-- Sticky Floating Action -->
+<div class="fixed bottom-20 left-0 w-full px-4 pb-4 z-40 bg-gradient-to-t from-background via-background/80 to-transparent pt-10">
+<button class="w-full bg-secondary text-on-secondary font-h1 py-4 rounded-2xl flex items-center justify-center gap-2 shadow-2xl shadow-secondary/20 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined font-bold">add_circle</span>
+            Create Private Room
+        </button>
+</div>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full h-20 bg-slate-950/80 backdrop-blur-2xl flex justify-around items-center px-6 pb-4 border-t border-slate-800 z-50 rounded-t-lg shadow-[0_-4px_20px_rgba(0,0,0,0.5)]">
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-blue-300 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined">grid_view</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-blue-300 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">Wallet</span>
+</a>
+<!-- Active Multiplayer Tab -->
+<a class="flex flex-col items-center justify-center text-blue-500 drop-shadow-[0_0_8px_rgba(19,127,236,0.5)] active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">groups</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">Multiplayer</span>
+</a>
+<a class="flex flex-col items-center justify-center text-slate-500 hover:text-blue-300 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-['Plus_Jakarta_Sans'] text-[10px] font-bold uppercase tracking-widest mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

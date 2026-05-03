@@ -35,7 +35,7 @@ func (a *derivAccount) inFlight() int64 {
 	return atomic.LoadInt64(&a.active)
 }
 
-func (a *derivAccount) execute(ctx context.Context, order tradeOrder) (*tradeSettlement, error) {
+func (a *derivAccount) execute(ctx context.Context, order tradeOrder, active *activeTrade) (*tradeSettlement, error) {
 	atomic.AddInt64(&a.active, 1)
 	defer atomic.AddInt64(&a.active, -1)
 
@@ -88,7 +88,7 @@ func (a *derivAccount) execute(ctx context.Context, order tradeOrder) (*tradeSet
 		Buy:   resp.Proposal.Id,
 		Price: order.StakeUsd,
 	}
-	_, sub, err := api.SubscribeBuy(ctx, buyReq)
+	buyResp, sub, err := api.SubscribeBuy(ctx, buyReq)
 	if err != nil {
 		return nil, fmt.Errorf("deriv buy: %w", err)
 	}
@@ -99,12 +99,55 @@ func (a *derivAccount) execute(ctx context.Context, order tradeOrder) (*tradeSet
 	defer timeout.Stop()
 
 	contractID := ""
+	contractIDInt := 0
+	if buyResp.Buy != nil {
+		contractIDInt = buyResp.Buy.ContractId
+		contractID = strconv.Itoa(contractIDInt)
+	}
+	var cashoutCh <-chan cashoutRequest
+	if active != nil {
+		cashoutCh = active.cashoutCh
+	}
+	pendingCashout := false
+	cashoutRequested := false
+	sellActiveContract := func(reason string) (*tradeSettlement, bool) {
+		if contractIDInt == 0 {
+			pendingCashout = true
+			return nil, false
+		}
+		if cashoutRequested {
+			return nil, false
+		}
+		cashoutRequested = true
+		sellResp, err := api.Sell(ctx, schema.Sell{
+			Sell:  contractIDInt,
+			Price: 0,
+		})
+		if err != nil {
+			log.Printf("[trace=%s][%s] cashout sell failed contract=%s: %v", order.TraceID, a.id, contractID, err)
+			return nil, false
+		}
+		if sellResp.Sell == nil || sellResp.Sell.SoldFor == nil {
+			log.Printf("[trace=%s][%s] cashout sell missing sold_for contract=%s", order.TraceID, a.id, contractID)
+			return nil, false
+		}
+		soldFor := *sellResp.Sell.SoldFor
+		log.Printf("[trace=%s][%s] cashout sold contract=%s reason=%s sold_for=%.2f", order.TraceID, a.id, contractID, reason, soldFor)
+		return cashoutSettlement(order, contractID, soldFor), true
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-timeout.C:
 			return nil, fmt.Errorf("deriv settlement timeout")
+		case req := <-cashoutCh:
+			if req.TraceID != "" {
+				log.Printf("[trace=%s][%s] cashout received for contract=%s", req.TraceID, a.id, contractID)
+			}
+			if settlement, ok := sellActiveContract("user"); ok {
+				return settlement, nil
+			}
 		case msg, ok := <-sub.Stream:
 			if !ok {
 				return nil, fmt.Errorf("deriv stream closed")
@@ -114,7 +157,13 @@ func (a *derivAccount) execute(ctx context.Context, order tradeOrder) (*tradeSet
 				continue
 			}
 			if oc.ContractId != nil {
+				contractIDInt = *oc.ContractId
 				contractID = strconv.Itoa(*oc.ContractId)
+			}
+			if pendingCashout {
+				if settlement, ok := sellActiveContract("pending"); ok {
+					return settlement, nil
+				}
 			}
 			if oc.IsSold == nil || *oc.IsSold != 1 {
 				log.Printf(
@@ -157,6 +206,24 @@ func (a *derivAccount) execute(ctx context.Context, order tradeOrder) (*tradeSet
 				ContractID: contractID,
 			}, nil
 		}
+	}
+}
+
+func cashoutSettlement(order tradeOrder, contractID string, soldFor float64) *tradeSettlement {
+	outcome := "LOSS"
+	payout := 0.0
+	if soldFor > 0 {
+		outcome = "WIN"
+		payout = soldFor
+	}
+	if math.Abs(soldFor-order.StakeUsd) <= 0.00001 {
+		outcome = "REFUND"
+		payout = order.StakeUsd
+	}
+	return &tradeSettlement{
+		Outcome:    outcome,
+		PayoutUsd:  payout,
+		ContractID: contractID,
 	}
 }
 

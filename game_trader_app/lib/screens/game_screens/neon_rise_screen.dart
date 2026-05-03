@@ -4,8 +4,12 @@ import '../../app_theme.dart';
 import '../../services/game_service.dart';
 import '../../utils/balance_guard.dart';
 import '../../utils/game_round_mixin.dart';
+import '../../utils/play_mode.dart';
+import '../../widgets/game_activity_app_bar.dart';
 import '../../widgets/game_message.dart';
-import '../../widgets/wallet_balance_chip.dart';
+import '../../widgets/play_mode_toggle.dart';
+import '../../widgets/press_scale.dart';
+import '../../widgets/stake_adjuster.dart';
 
 class NeonRiseScreen extends StatefulWidget {
   const NeonRiseScreen({super.key});
@@ -19,75 +23,35 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
   static const int _minTicks = 1;
   static const int _maxTicks = 10;
 
-  double stakeAmount = 10.0;
+  double stakeAmount = BalanceGuard.minStakeUsd;
+  PlayMode _playMode = PlayMode.demo;
   int durationTicks = 5;
   bool _isPlacing = false;
-  String _statusMessage = 'Share your call';
+  String _statusMessage = 'Choose direction';
   String? _activeDirection;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 20,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.currency_exchange,
-              color: AppTheme.primaryColor,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'EUR/USD',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.keyboard_arrow_down,
-              color: Colors.white.withValues(alpha: 0.5),
-            ),
-          ],
-        ),
-        actions: [WalletBalanceChip()],
-      ),
+      backgroundColor: AppTheme.gameBackground,
+      appBar: const GameActivityAppBar(title: 'Neon Rise'),
       body: Stack(
         children: [
           SafeArea(
             child: Column(
               children: [
-                // Chart Area (Placeholder)
                 Expanded(
                   child: Container(
                     margin: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppTheme.surfaceDark,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppTheme.borderDark),
-                      image: const DecorationImage(
-                        image: AssetImage('assets/images/neon_rise_bg.png'),
-                        fit: BoxFit.cover,
-                        opacity:
-                            0.3, // higher opacity since it's only in the chart
-                      ),
+                      color: AppTheme.gameSurface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppTheme.gameBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.05),
-                          blurRadius: 40,
-                          spreadRadius: 10,
+                          color: AppTheme.primaryColor.withValues(alpha: 0.18),
+                          blurRadius: 32,
+                          spreadRadius: -8,
                         ),
                       ],
                     ),
@@ -98,15 +62,68 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                           size: const Size(double.infinity, double.infinity),
                           painter: _GridPainter(),
                         ),
-                        // Fake Chart
                         CustomPaint(
                           size: const Size(double.infinity, double.infinity),
-                          painter: _ChartPainter(color: AppTheme.primaryColor),
+                          painter: _ChartPainter(color: AppTheme.primarySoft),
                         ),
-                        // Live Price Tag
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '1.45x',
+                                style: TextStyle(
+                                  color: AppTheme.primarySoft,
+                                  fontSize: 64,
+                                  fontWeight: FontWeight.w900,
+                                  shadows: [
+                                    Shadow(
+                                      color: AppTheme.primaryColor.withValues(
+                                        alpha: 0.65,
+                                      ),
+                                      blurRadius: 22,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryColor.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: AppTheme.primaryColor.withValues(
+                                      alpha: 0.24,
+                                    ),
+                                  ),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _LiveDot(),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Live Prediction',
+                                      style: TextStyle(
+                                        color: AppTheme.primarySoft,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         Positioned(
                           right: 0,
-                          top: 100, // Roughly where the line ends
+                          top: 100,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
@@ -137,7 +154,6 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                             ),
                           ),
                         ),
-                        // Game Badge
                         Positioned(
                           left: 20,
                           top: 20,
@@ -150,8 +166,8 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.primaryColor.withValues(
-                                    alpha: 0.2,
+                                  color: AppTheme.goldText.withValues(
+                                    alpha: 0.08,
                                   ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
@@ -160,8 +176,8 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w900,
-                                    color: AppTheme.primaryColor,
-                                    letterSpacing: 1.0,
+                                    color: AppTheme.primarySoft,
+                                    letterSpacing: 0,
                                   ),
                                 ),
                               ),
@@ -182,16 +198,27 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                   ),
                 ),
 
-                // Controls Area
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundDark,
-                    border: Border(top: BorderSide(color: AppTheme.borderDark)),
+                    color: AppTheme.gameBackground,
+                    border: Border(top: BorderSide(color: AppTheme.gameBorder)),
                   ),
                   child: Column(
                     children: [
-                      // Stake & Duration
+                      StakeAdjuster(
+                        label: 'STAKE',
+                        value: stakeAmount,
+                        enabled: !_isPlacing,
+                        onChanged: (next) => setState(() => stakeAmount = next),
+                      ),
+                      const SizedBox(height: 12),
+                      PlayModeToggle(
+                        value: _playMode,
+                        enabled: !_isPlacing,
+                        onChanged: (mode) => setState(() => _playMode = mode),
+                      ),
+                      const SizedBox(height: 16),
                       Row(
                         children: [
                           Expanded(
@@ -211,23 +238,40 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                               }),
                             ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _statusMessage,
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTradeButton(
+                              label: 'LOWER',
+                              icon: Icons.arrow_downward,
+                            ),
+                          ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: _buildControlPanel(
-                              label: 'STAKE',
-                              value: '\$${stakeAmount.toStringAsFixed(2)}',
-                              icon: Icons.monetization_on,
-                              onDecrease: () => setState(
-                                () => stakeAmount > 1 ? stakeAmount -= 1 : null,
-                              ),
-                              onIncrease: () =>
-                                  setState(() => stakeAmount += 1),
+                            child: _buildTradeButton(
+                              label: 'HIGHER',
+                              icon: Icons.arrow_upward,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
-                      // Payout Info
+                      const SizedBox(height: 16),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -245,40 +289,6 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                               color: Colors.greenAccent,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _statusMessage,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildTradeButton(
-                              label: 'LOWER',
-                              icon: Icons.arrow_downward,
-                              color: const Color(0xFFef4444), // Red
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildTradeButton(
-                              label: 'HIGHER',
-                              icon: Icons.arrow_upward,
-                              color: const Color(0xFF22c55e), // Green
                             ),
                           ),
                         ],
@@ -304,9 +314,9 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
+        color: AppTheme.gameSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderDark),
+        border: Border.all(color: AppTheme.gameBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,7 +331,7 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF94a3b8),
-                  letterSpacing: 0.5,
+                  letterSpacing: 0,
                 ),
               ),
             ],
@@ -335,12 +345,19 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundDark,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.goldButtonTop,
+                        AppTheme.goldButtonBottom,
+                      ],
+                    ),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.remove,
-                    color: Colors.white,
+                    color: AppTheme.goldText,
                     size: 16,
                   ),
                 ),
@@ -348,7 +365,7 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
               Text(
                 value,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppTheme.textPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -358,10 +375,21 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundDark,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppTheme.goldButtonTop,
+                        AppTheme.goldButtonBottom,
+                      ],
+                    ),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.add, color: Colors.white, size: 16),
+                  child: const Icon(
+                    Icons.add,
+                    color: AppTheme.goldText,
+                    size: 16,
+                  ),
                 ),
               ),
             ],
@@ -371,45 +399,66 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
     );
   }
 
-  Widget _buildTradeButton({
-    required String label,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.2),
-            blurRadius: 16,
-            spreadRadius: -4,
+  Widget _buildTradeButton({required String label, required IconData icon}) {
+    final isDisabled = _isPlacing;
+    return PressScale(
+      enabled: !isDisabled,
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDisabled
+                ? const [AppTheme.goldDisabledTop, AppTheme.goldDisabledBottom]
+                : const [AppTheme.goldButtonTop, AppTheme.goldButtonBottom],
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: _isPlacing ? null : () => _handleTrade(label),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 18,
-                  letterSpacing: -0.5,
-                ),
+          border: Border.all(
+            color: AppTheme.goldButtonBottom.withValues(
+              alpha: isDisabled ? 0.4 : 0.9,
+            ),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.goldButtonBottom.withValues(
+                alpha: isDisabled ? 0.08 : 0.26,
               ),
-            ],
+              blurRadius: 16,
+              spreadRadius: -4,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: isDisabled ? null : () => _handleTrade(label),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  color: AppTheme.goldText.withValues(
+                    alpha: isDisabled ? 0.65 : 1,
+                  ),
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: AppTheme.goldText.withValues(
+                      alpha: isDisabled ? 0.65 : 1,
+                    ),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -418,8 +467,9 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
 
   Future<void> _handleTrade(String label) async {
     if (_isPlacing) return;
-    final canPlay = await BalanceGuard.ensurePlayableStake(
+    final canPlay = await ensureStakeForPlayMode(
       context,
+      _playMode,
       stakeAmount,
     );
     if (!canPlay || !mounted) return;
@@ -431,6 +481,21 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
       _activeDirection = label;
       _statusMessage = '$label signal routing...';
     });
+
+    if (_playMode.isDemo) {
+      showGameMessage(context, 'Demo signal. Wallet unchanged.');
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (!mounted || !_isPlacing) return;
+      onGameResult(
+        buildDemoGameResult(
+          gameType: 'NEON_RISE',
+          stakeUsd: stakeAmount,
+          payoutMultiplier: 1.95,
+          winChance: 0.49,
+        ),
+      );
+      return;
+    }
 
     try {
       await placeGameBet(
@@ -516,6 +581,22 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
       _statusMessage = event.message;
     });
     showGameMessage(context, event.message);
+  }
+}
+
+class _LiveDot extends StatelessWidget {
+  const _LiveDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: const BoxDecoration(
+        color: AppTheme.primarySoft,
+        shape: BoxShape.circle,
+      ),
+    );
   }
 }
 

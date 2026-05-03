@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../app_theme.dart';
 import '../../services/game_service.dart';
 import '../../utils/balance_guard.dart';
 import '../../utils/game_round_mixin.dart';
+import '../../utils/play_mode.dart';
+import '../../widgets/game_activity_app_bar.dart';
 import '../../widgets/game_message.dart';
-import '../../widgets/wallet_balance_chip.dart';
+import '../../widgets/play_mode_toggle.dart';
+import '../../widgets/press_scale.dart';
+import '../../widgets/stake_adjuster.dart';
 
 class VelocityVectorScreen extends StatefulWidget {
   const VelocityVectorScreen({super.key});
@@ -15,7 +20,8 @@ class VelocityVectorScreen extends StatefulWidget {
 
 class _VelocityVectorScreenState extends State<VelocityVectorScreen>
     with GameRoundMixin<VelocityVectorScreen> {
-  double stakeAmount = 15.0;
+  double stakeAmount = BalanceGuard.minStakeUsd;
+  PlayMode _playMode = PlayMode.demo;
   bool _isExecuting = false;
   String _statusMessage = 'Awaiting vector command';
   String? _activeCommand;
@@ -23,70 +29,8 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0b121c),
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(80),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
-            ),
-          ),
-          child: AppBar(
-            backgroundColor: const Color(0xFF0b121c),
-            elevation: 0,
-            leadingWidth: 80,
-            leading: GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              child: Container(
-                margin: const EdgeInsets.only(left: 16, top: 12, bottom: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF131c2c),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.arrow_back_ios_new,
-                  size: 16,
-                  color: Colors.blueAccent,
-                ),
-              ),
-            ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  'VELOCITY VECTOR',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    color: Colors.blueAccent,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'SQ: 29.92  |  HDG: 042°',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.0,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              WalletBalanceChip(
-                margin: const EdgeInsets.only(right: 16),
-                backgroundColor: const Color(0xFF131c2c),
-                borderColor: const Color(0xFF1e293b),
-                iconColor: Colors.blueAccent,
-              ),
-            ],
-          ),
-        ),
-      ),
+      backgroundColor: AppTheme.backgroundDark,
+      appBar: const GameActivityAppBar(title: 'Velocity Vector'),
       body: Stack(
         children: [
           // Background Grid
@@ -156,7 +100,7 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
                               const Text(
                                 'MULTIPLIER',
                                 style: TextStyle(
-                                  color: Colors.white54,
+                                  color: AppTheme.textSecondary,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 1.5,
@@ -170,7 +114,7 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
                                   const Text(
                                     '1.42',
                                     style: TextStyle(
-                                      color: Colors.white,
+                                      color: AppTheme.textPrimary,
                                       fontSize: 64,
                                       fontWeight: FontWeight.w900,
                                       letterSpacing: -1.0,
@@ -233,58 +177,22 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
                   vertical: 24,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0e1520),
-                  border: Border(
-                    top: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.05),
-                    ),
-                  ),
+                  color: AppTheme.gameSurface,
+                  border: Border(top: BorderSide(color: AppTheme.gameBorder)),
                 ),
                 child: Column(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'STAKE',
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            _buildStakeAdjustButton(
-                              icon: Icons.remove,
-                              onTap: () {
-                                setState(
-                                  () =>
-                                      stakeAmount > 1 ? stakeAmount -= 1 : null,
-                                );
-                              },
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              child: Text(
-                                '\$${stakeAmount.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                            _buildStakeAdjustButton(
-                              icon: Icons.add,
-                              onTap: () => setState(() => stakeAmount += 1),
-                            ),
-                          ],
-                        ),
-                      ],
+                    StakeAdjuster(
+                      label: 'STAKE',
+                      value: stakeAmount,
+                      enabled: !_isExecuting,
+                      onChanged: (next) => setState(() => stakeAmount = next),
+                    ),
+                    const SizedBox(height: 12),
+                    PlayModeToggle(
+                      value: _playMode,
+                      enabled: !_isExecuting,
+                      onChanged: (mode) => setState(() => _playMode = mode),
                     ),
                     const SizedBox(height: 20),
                     Row(
@@ -294,7 +202,6 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
                             label: 'CLIMB',
                             subLabel: 'VECTOR +',
                             icon: Icons.keyboard_arrow_up,
-                            color: Colors.blueAccent,
                             onTap: () => _handleCommand('CLIMB'),
                           ),
                         ),
@@ -304,7 +211,6 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
                             label: 'DIVE',
                             subLabel: 'VECTOR -',
                             icon: Icons.keyboard_arrow_down,
-                            color: Colors.redAccent,
                             onTap: () => _handleCommand('DIVE'),
                           ),
                         ),
@@ -317,7 +223,7 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
                       child: Text(
                         _statusMessage,
                         style: const TextStyle(
-                          color: Colors.white70,
+                          color: AppTheme.textSecondary,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                           letterSpacing: 0.4,
@@ -325,49 +231,66 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
                       ),
                     ),
                     const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 60,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.blueAccent.withValues(alpha: 0.4),
-                              blurRadius: 20,
-                              spreadRadius: -5,
-                              offset: const Offset(0, 8),
+                    PressScale(
+                      enabled: !_isExecuting,
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 60,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.goldButtonTop,
+                                AppTheme.goldButtonBottom,
+                              ],
                             ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueAccent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                          onPressed: () => _handleCommand('LAND'),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.flight_land,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              const Text(
-                                'LAND POSITION',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 2.0,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.goldButtonBottom.withValues(
+                                  alpha: 0.35,
                                 ),
+                                blurRadius: 20,
+                                spreadRadius: -5,
+                                offset: const Offset(0, 8),
                               ),
                             ],
+                          ),
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              foregroundColor: AppTheme.goldText,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: _isExecuting
+                                ? null
+                                : () => _handleCommand('LAND'),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.flight_land,
+                                  color: AppTheme.goldText,
+                                  size: 24,
+                                ),
+                                const SizedBox(width: 12),
+                                const Text(
+                                  'LAND POSITION',
+                                  style: TextStyle(
+                                    color: AppTheme.goldText,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 2.0,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -417,7 +340,7 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
           width: 6,
           height: 140,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: AppTheme.gameBorder.withValues(alpha: 0.7),
             borderRadius: BorderRadius.circular(3),
           ),
           alignment: Alignment.bottomCenter,
@@ -437,7 +360,7 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
         Text(
           label,
           style: const TextStyle(
-            color: Colors.white54,
+            color: AppTheme.textSecondary,
             fontSize: 10,
             fontWeight: FontWeight.w800,
             letterSpacing: 1.0,
@@ -447,29 +370,11 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
     );
   }
 
-  Widget _buildStakeAdjustButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: const Color(0xFF131c2c),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: Icon(icon, size: 18, color: Colors.white),
-      ),
-    );
-  }
-
   Future<void> _handleCommand(String command) async {
     if (_isExecuting) return;
-    final canPlay = await BalanceGuard.ensurePlayableStake(
+    final canPlay = await ensureStakeForPlayMode(
       context,
+      _playMode,
       stakeAmount,
     );
     if (!canPlay) return;
@@ -480,6 +385,21 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
       _activeCommand = command;
       _statusMessage = '$command vector routing...';
     });
+
+    if (_playMode.isDemo) {
+      showGameMessage(context, 'Demo vector. Wallet unchanged.');
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      if (!mounted || !_isExecuting) return;
+      onGameResult(
+        buildDemoGameResult(
+          gameType: 'VELOCITY_VECTOR',
+          stakeUsd: stakeAmount,
+          payoutMultiplier: command == 'LAND' ? 2.5 : 2.2,
+          winChance: command == 'LAND' ? 0.42 : 0.46,
+        ),
+      );
+      return;
+    }
 
     try {
       await placeGameBet(
@@ -532,53 +452,76 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
     required String label,
     required String subLabel,
     required IconData icon,
-    required Color color,
     required VoidCallback onTap,
   }) {
-    return Container(
-      height: 130,
-      decoration: BoxDecoration(
-        color: const Color(0xFF111928),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+    final isDisabled = _isExecuting;
+    return PressScale(
+      enabled: !isDisabled,
+      child: Container(
+        height: 130,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDisabled
+                ? const [AppTheme.goldDisabledTop, AppTheme.goldDisabledBottom]
+                : const [AppTheme.goldButtonTop, AppTheme.goldButtonBottom],
+          ),
           borderRadius: BorderRadius.circular(16),
-          onTap: _isExecuting ? null : onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Align(
-                  alignment: Alignment.topLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: Text(
-                      subLabel,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.5,
+          border: Border.all(
+            color: AppTheme.goldButtonBottom.withValues(
+              alpha: isDisabled ? 0.4 : 0.9,
+            ),
+          ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: isDisabled ? null : onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Align(
+                    alignment: Alignment.topLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 16),
+                      child: Text(
+                        subLabel,
+                        style: TextStyle(
+                          color: AppTheme.goldText.withValues(
+                            alpha: isDisabled ? 0.65 : 1,
+                          ),
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                Icon(icon, color: color, size: 36),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2.0,
+                  Icon(
+                    icon,
+                    color: AppTheme.goldText.withValues(
+                      alpha: isDisabled ? 0.65 : 1,
+                    ),
+                    size: 36,
                   ),
-                ),
-              ],
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: AppTheme.goldText.withValues(
+                        alpha: isDisabled ? 0.65 : 1,
+                      ),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2.0,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

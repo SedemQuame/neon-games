@@ -7,8 +7,12 @@ import '../../app_theme.dart';
 import '../../services/game_service.dart';
 import '../../utils/balance_guard.dart';
 import '../../utils/game_round_mixin.dart';
+import '../../utils/play_mode.dart';
 import '../../widgets/game_message.dart';
-import '../../widgets/wallet_balance_chip.dart';
+import '../../widgets/game_activity_app_bar.dart';
+import '../../widgets/play_mode_toggle.dart';
+import '../../widgets/press_scale.dart';
+import '../../widgets/stake_adjuster.dart';
 
 class DigitDashScreen extends StatefulWidget {
   const DigitDashScreen({super.key});
@@ -19,7 +23,8 @@ class DigitDashScreen extends StatefulWidget {
 
 class _DigitDashScreenState extends State<DigitDashScreen>
     with TickerProviderStateMixin, GameRoundMixin<DigitDashScreen> {
-  double stakeAmount = 10.0;
+  double stakeAmount = BalanceGuard.minStakeUsd;
+  PlayMode _playMode = PlayMode.demo;
   int predictedDigit = 5;
 
   late final AnimationController _settleController;
@@ -73,42 +78,8 @@ class _DigitDashScreenState extends State<DigitDashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.white,
-            size: 20,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.currency_exchange,
-              color: Colors.blueAccent,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'BTC/USD',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.keyboard_arrow_down,
-              color: Colors.white.withValues(alpha: 0.5),
-            ),
-          ],
-        ),
-        actions: const [WalletBalanceChip()],
-      ),
+      backgroundColor: AppTheme.gameBackground,
+      appBar: const GameActivityAppBar(title: 'Digit Dash'),
       body: Stack(
         children: [
           SafeArea(
@@ -118,14 +89,9 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                   child: Container(
                     margin: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppTheme.surfaceDark,
+                      color: AppTheme.gameSurface,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppTheme.borderDark),
-                      image: const DecorationImage(
-                        image: AssetImage('assets/images/digit_dash_bg.png'),
-                        fit: BoxFit.cover,
-                        opacity: 0.3,
-                      ),
+                      border: Border.all(color: AppTheme.gameBorder),
                       boxShadow: [
                         BoxShadow(
                           color: AppTheme.primaryColor.withValues(alpha: 0.05),
@@ -159,7 +125,7 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                             margin: const EdgeInsets.only(top: 16),
                             child: const Icon(
                               Icons.keyboard_arrow_down,
-                              color: Colors.white,
+                              color: AppTheme.goldText,
                               size: 56,
                             ),
                           ),
@@ -176,7 +142,7 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.blueAccent.withValues(
+                                  color: AppTheme.goldButtonBottom.withValues(
                                     alpha: 0.2,
                                   ),
                                   borderRadius: BorderRadius.circular(4),
@@ -186,7 +152,7 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w900,
-                                    color: Colors.blueAccent,
+                                    color: AppTheme.goldText,
                                     letterSpacing: 1.0,
                                   ),
                                 ),
@@ -210,12 +176,33 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: AppTheme.backgroundDark,
-                    border: Border(top: BorderSide(color: AppTheme.borderDark)),
+                    color: AppTheme.gameBackground,
+                    border: Border(top: BorderSide(color: AppTheme.gameBorder)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      StakeAdjuster(
+                        label: 'STAKE',
+                        value: stakeAmount,
+                        enabled: !_isSpinning,
+                        onChanged: (next) => setState(() => stakeAmount = next),
+                      ),
+                      const SizedBox(height: 12),
+                      PlayModeToggle(
+                        value: _playMode,
+                        enabled: !_isSpinning,
+                        onChanged: (mode) => setState(() => _playMode = mode),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _status,
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -234,13 +221,15 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.blueAccent.withValues(alpha: 0.2),
+                              color: AppTheme.goldButtonBottom.withValues(
+                                alpha: 0.2,
+                              ),
                               borderRadius: BorderRadius.circular(9999),
                             ),
                             child: Text(
                               '$predictedDigit',
                               style: const TextStyle(
-                                color: Colors.blueAccent,
+                                color: AppTheme.goldText,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
                               ),
@@ -249,57 +238,56 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                         ],
                       ),
                       const SizedBox(height: 12),
-                      SizedBox(
-                        height: 40,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: 10,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(width: 8),
-                          itemBuilder: (context, index) {
-                            final isSelected = predictedDigit == index;
-                            return GestureDetector(
-                              onTap: () =>
-                                  setState(() => predictedDigit = index),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                width: 40,
-                                decoration: BoxDecoration(
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: 10,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 5,
+                              mainAxisSpacing: 8,
+                              crossAxisSpacing: 8,
+                              childAspectRatio: 1.65,
+                            ),
+                        itemBuilder: (context, index) {
+                          final isSelected = predictedDigit == index;
+                          return GestureDetector(
+                            onTap: () => setState(() => predictedDigit = index),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              decoration: BoxDecoration(
+                                gradient: isSelected
+                                    ? const LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          AppTheme.goldButtonTop,
+                                          AppTheme.goldButtonBottom,
+                                        ],
+                                      )
+                                    : null,
+                                color: isSelected ? null : AppTheme.gameSurface,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
                                   color: isSelected
-                                      ? Colors.blueAccent
-                                      : AppTheme.surfaceDark,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? Colors.blueAccent
-                                        : AppTheme.borderDark,
-                                  ),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '$index',
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : const Color(0xFF64748b),
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 16,
-                                  ),
+                                      ? AppTheme.goldButtonBottom
+                                      : AppTheme.gameBorder,
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      _buildControlPanel(
-                        label: 'STAKE',
-                        value: '\$${stakeAmount.toStringAsFixed(2)}',
-                        icon: Icons.monetization_on,
-                        onDecrease: () => setState(
-                          () => stakeAmount > 1 ? stakeAmount -= 1 : null,
-                        ),
-                        onIncrease: () => setState(() => stakeAmount += 1),
+                              alignment: Alignment.center,
+                              child: Text(
+                                '$index',
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? AppTheme.goldText
+                                      : AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 24),
                       Row(
@@ -323,22 +311,13 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _status,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       Row(
                         children: [
                           Expanded(
                             child: _buildTradeButton(
                               label: 'DIFFERS',
                               icon: Icons.difference,
-                              color: const Color(0xFF0ea5e9),
                               busy: _isSpinning && !_matchMode,
                               onTap: () => _playDigitBet(false),
                             ),
@@ -348,7 +327,6 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                             child: _buildTradeButton(
                               label: 'MATCHES',
                               icon: Icons.done_all,
-                              color: const Color(0xFF3b82f6),
                               busy: _isSpinning && _matchMode,
                               onTap: () => _playDigitBet(true),
                             ),
@@ -366,124 +344,66 @@ class _DigitDashScreenState extends State<DigitDashScreen>
     );
   }
 
-  Widget _buildControlPanel({
-    required String label,
-    required String value,
-    required IconData icon,
-    required VoidCallback onDecrease,
-    required VoidCallback onIncrease,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderDark),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 12, color: const Color(0xFF94a3b8)),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF94a3b8),
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              GestureDetector(
-                onTap: onDecrease,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: AppTheme.backgroundDark,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.remove,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              GestureDetector(
-                onTap: onIncrease,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: AppTheme.backgroundDark,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.add, color: Colors.white, size: 16),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTradeButton({
     required String label,
     required IconData icon,
-    required Color color,
     required VoidCallback onTap,
     bool busy = false,
   }) {
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.3), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.2),
-            blurRadius: 16,
-            spreadRadius: -4,
+    return PressScale(
+      enabled: !busy,
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: busy
+                ? const [AppTheme.goldDisabledTop, AppTheme.goldDisabledBottom]
+                : const [AppTheme.goldButtonTop, AppTheme.goldButtonBottom],
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: busy ? null : onTap,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 24),
-              const SizedBox(width: 8),
-              Text(
-                busy ? 'ARMED...' : label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 16,
-                  letterSpacing: -0.5,
-                ),
+          border: Border.all(
+            color: AppTheme.goldButtonBottom.withValues(
+              alpha: busy ? 0.4 : 0.9,
+            ),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.goldButtonBottom.withValues(
+                alpha: busy ? 0.08 : 0.26,
               ),
-            ],
+              blurRadius: 16,
+              spreadRadius: -4,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: busy ? null : onTap,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  color: AppTheme.goldText.withValues(alpha: busy ? 0.65 : 1),
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  busy ? 'ARMED...' : label,
+                  style: TextStyle(
+                    color: AppTheme.goldText.withValues(alpha: busy ? 0.65 : 1),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -492,11 +412,13 @@ class _DigitDashScreenState extends State<DigitDashScreen>
 
   Future<void> _playDigitBet(bool matchMode) async {
     if (_isSpinning) return;
-    final canPlay = await BalanceGuard.ensurePlayableStake(
+    final canPlay = await ensureStakeForPlayMode(
       context,
+      _playMode,
       stakeAmount,
     );
     if (!canPlay) return;
+    if (!mounted) return;
 
     setState(() {
       _matchMode = matchMode;
@@ -506,6 +428,23 @@ class _DigitDashScreenState extends State<DigitDashScreen>
     });
     _flashController.stop();
     _wheelTicker?.cancel();
+
+    if (_playMode.isDemo) {
+      setState(() => _status = 'Demo spin...');
+      _startWheelLoop();
+      showGameMessage(context, 'Demo spin. Wallet unchanged.');
+      await Future<void>.delayed(const Duration(milliseconds: 950));
+      if (!mounted || !_isSpinning) return;
+      onGameResult(
+        buildDemoGameResult(
+          gameType: 'DIGIT_DASH',
+          stakeUsd: stakeAmount,
+          payoutMultiplier: matchMode ? 10.0 : 1.10,
+          winChance: matchMode ? 0.10 : 0.90,
+        ),
+      );
+      return;
+    }
 
     try {
       await placeGameBet(
@@ -643,13 +582,13 @@ class _RoulettePainter extends CustomPainter {
       final startAngle = -math.pi / 2 + (i * sweepAngle) - (sweepAngle / 2);
 
       Color segmentColor = (i % 2 == 0)
-          ? Colors.blueAccent.withValues(alpha: 0.8)
-          : AppTheme.surfaceDark;
+          ? const Color(0xFF141414)
+          : const Color(0xFFC18A16);
 
       if (selectedIndex == i) {
         segmentColor = Color.lerp(
           segmentColor,
-          Colors.yellow,
+          const Color(0xFFFFDF7A),
           flashValue * 0.7,
         )!;
       }
@@ -667,7 +606,7 @@ class _RoulettePainter extends CustomPainter {
       );
 
       final borderPaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.1)
+        ..color = const Color(0xFFE7C86A).withValues(alpha: 0.22)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2;
 
@@ -688,7 +627,7 @@ class _RoulettePainter extends CustomPainter {
           shadows: [
             if (selectedIndex == i)
               Shadow(
-                color: Colors.yellow.withValues(alpha: flashValue),
+                color: const Color(0xFFFFDF7A).withValues(alpha: flashValue),
                 blurRadius: 20 * flashValue,
               ),
           ],
@@ -721,13 +660,13 @@ class _RoulettePainter extends CustomPainter {
     canvas.drawCircle(
       center,
       radius * 0.3,
-      Paint()..color = AppTheme.backgroundDark,
+      Paint()..color = const Color(0xFF111111),
     );
     canvas.drawCircle(
       center,
       radius * 0.3,
       Paint()
-        ..color = Colors.blueAccent
+        ..color = const Color(0xFFE7C86A)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3,
     );

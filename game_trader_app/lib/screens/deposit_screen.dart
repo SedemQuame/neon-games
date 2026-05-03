@@ -1,204 +1,315 @@
 import 'package:flutter/material.dart';
-import '../app_theme.dart';
-import 'crypto_deposit_screen.dart';
 
-class DepositScreen extends StatelessWidget {
+import '../app_theme.dart';
+import '../widgets/app_buttons.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/casino_top_nav.dart';
+import '../widgets/section_header.dart';
+import '../widgets/tag_badge.dart';
+import 'crypto_deposit_screen.dart';
+import 'mobile_money_deposit_screen.dart';
+
+enum _DepositMethod { mobileMoney, crypto, card }
+
+class DepositScreen extends StatefulWidget {
   const DepositScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(context),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
-                children: [
-                  const Text(
-                    'Select Deposit Method',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
-                      letterSpacing: -1,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Cryptocurrency deposits are currently available for wallet funding.',
-                    style: TextStyle(color: Color(0xFF94a3b8), fontSize: 14),
-                  ),
-                  const SizedBox(height: 32),
-                  _buildMethodCard(
-                    context,
-                    title: 'Cryptocurrency',
-                    subtitle: 'Instant deposit via BTC, ETH, USDT',
-                    icon: Icons.currency_bitcoin,
-                    iconColor: Colors.orange,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CryptoDepositScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  State<DepositScreen> createState() => _DepositScreenState();
+}
+
+class _DepositScreenState extends State<DepositScreen> {
+  final TextEditingController _amountController = TextEditingController(
+    text: '100.00',
+  );
+  _DepositMethod _selected = _DepositMethod.mobileMoney;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  void _selectAmount(num value) {
+    _amountController.text = value.toStringAsFixed(2);
+  }
+
+  void _continue() {
+    switch (_selected) {
+      case _DepositMethod.mobileMoney:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MobileMoneyDepositScreen()),
+        );
+        return;
+      case _DepositMethod.crypto:
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const CryptoDepositScreen()),
+        );
+        return;
+      case _DepositMethod.card:
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Card deposits are coming soon.')),
+        );
+        return;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CasinoScaffold(
+      appBar: const CasinoTopNav(title: 'Deposit', showBackButton: true),
+      body: ListView(
+        padding: EdgeInsets.symmetric(vertical: context.space.md),
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceDark,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.borderDark),
-              ),
-              child: const Icon(
-                Icons.arrow_back,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
+          const SectionHeader(title: 'Deposit'),
+          SizedBox(height: context.space.md),
+          _buildMethodCard(
+            method: _DepositMethod.mobileMoney,
+            title: 'Mobile Money',
+            subtitle: 'MTN, Vodafone, AirtelTigo',
+            icon: Icons.phone_android_rounded,
+            color: context.colors.primary,
+            badge: 'Fastest',
           ),
-          const Text(
-            'DEPOSIT FUNDS',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2.0,
-              color: Colors.white,
-            ),
+          SizedBox(height: context.space.sm),
+          _buildMethodCard(
+            method: _DepositMethod.crypto,
+            title: 'Crypto',
+            subtitle: 'BTC, ETH, USDT',
+            icon: Icons.currency_bitcoin_rounded,
+            color: Colors.orange,
+            badge: 'Live',
           ),
-          const SizedBox(width: 40), // Spacer for centering
+          SizedBox(height: context.space.sm),
+          _buildMethodCard(
+            method: _DepositMethod.card,
+            title: 'Cards',
+            subtitle: 'Coming soon',
+            icon: Icons.credit_card_rounded,
+            color: AppTheme.rewardGold,
+            badge: 'Soon',
+          ),
+          SizedBox(height: context.space.lg),
+          _buildAmountPanel(),
+          SizedBox(height: context.space.md),
+          _buildSummaryPanel(),
+          SizedBox(height: context.space.lg),
+          PrimaryButton(
+            expanded: true,
+            label: _selected == _DepositMethod.card ? 'Notify Me' : 'Continue',
+            icon: Icons.bolt_rounded,
+            onPressed: _continue,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMethodCard(
-    BuildContext context, {
+  Widget _buildMethodCard({
+    required _DepositMethod method,
     required String title,
     required String subtitle,
     required IconData icon,
-    required Color iconColor,
-    required VoidCallback onTap,
-    bool isComingSoon = false,
+    required Color color,
+    required String badge,
   }) {
-    return GestureDetector(
-      onTap: isComingSoon ? null : onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceDark,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isComingSoon ? Colors.transparent : AppTheme.borderDark,
-          ),
-          boxShadow: isComingSoon
-              ? []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
+    final selected = _selected == method;
+    return SurfaceCard(
+      padding: EdgeInsets.zero,
+      backgroundColor: selected
+          ? context.colors.primary.withValues(alpha: 0.08)
+          : context.colors.bgCard,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(context.radii.lg),
+        onTap: () => setState(() => _selected = method),
+        child: Padding(
+          padding: EdgeInsets.all(context.space.sm),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(context.radii.lg),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
+                ),
+                child: Icon(icon, color: color),
               ),
-              child: Icon(icon, color: iconColor, size: 28),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isComingSoon
-                              ? Colors.white.withValues(alpha: 0.5)
-                              : Colors.white,
-                        ),
-                      ),
-                      if (isComingSoon) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'SOON',
-                            style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+              SizedBox(width: context.space.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: context.type.bodyStrong.copyWith(
+                              color: context.colors.textPrimary,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
                         ),
+                        TagBadge(
+                          label: badge,
+                          backgroundColor: color.withValues(alpha: 0.14),
+                          foregroundColor: color,
+                        ),
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isComingSoon
-                          ? const Color(0xFF94a3b8).withValues(alpha: 0.5)
-                          : const Color(0xFF94a3b8),
                     ),
+                    SizedBox(height: context.space.xxs),
+                    Text(
+                      subtitle,
+                      style: context.type.body.copyWith(
+                        color: context.colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: context.space.sm),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected
+                        ? context.colors.primary
+                        : context.colors.border,
+                    width: 2,
                   ),
-                ],
+                ),
+                child: selected
+                    ? Center(
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: context.colors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      )
+                    : null,
               ),
-            ),
-            if (!isComingSoon)
-              const Icon(
-                Icons.arrow_forward_ios,
-                color: AppTheme.primaryColor,
-                size: 16,
-              ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAmountPanel() {
+    return SurfaceCard(
+      padding: EdgeInsets.all(context.space.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Amount',
+            style: context.type.bodyStrong.copyWith(
+              color: context.colors.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          SizedBox(height: context.space.sm),
+          TextField(
+            controller: _amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: context.type.heroTitle.copyWith(
+              color: context.colors.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+            decoration: InputDecoration(
+              prefixText: r'$ ',
+              prefixStyle: context.type.heroTitle.copyWith(
+                color: context.colors.primary,
+                fontWeight: FontWeight.w900,
+              ),
+              hintText: '0.00',
+            ),
+          ),
+          SizedBox(height: context.space.md),
+          Wrap(
+            spacing: context.space.xs,
+            runSpacing: context.space.xs,
+            children: [
+              _amountChip(10),
+              _amountChip(50),
+              _amountChip(100),
+              _amountChip(500),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _amountChip(num value) {
+    return ActionChip(
+      label: Text(formatAmountLabel(value)),
+      onPressed: () => _selectAmount(value),
+      backgroundColor: context.colors.bgSurface,
+      side: BorderSide(color: context.colors.border),
+      labelStyle: context.type.label.copyWith(
+        color: context.colors.textPrimary,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+
+  String formatAmountLabel(num value) => '\$${value.toStringAsFixed(0)}';
+
+  Widget _buildSummaryPanel() {
+    final methodLabel = switch (_selected) {
+      _DepositMethod.mobileMoney => 'Mobile Money',
+      _DepositMethod.crypto => 'Crypto',
+      _DepositMethod.card => 'Cards',
+    };
+
+    return SurfaceCard(
+      padding: EdgeInsets.all(context.space.md),
+      backgroundColor: context.colors.bgSurface,
+      child: Column(
+        children: [
+          _summaryLine('Gateway', methodLabel),
+          Divider(height: context.space.lg, color: context.colors.border),
+          _summaryLine('Fee', '\$0.00', accent: context.colors.primary),
+          Divider(height: context.space.lg, color: context.colors.border),
+          _summaryLine(
+            'Estimated Time',
+            _selected == _DepositMethod.card ? 'Pending launch' : 'Instant',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryLine(String label, String value, {Color? accent}) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: context.type.body.copyWith(
+              color: context.colors.textSecondary,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: context.type.bodyStrong.copyWith(
+            color: accent ?? context.colors.textPrimary,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
     );
   }
 }

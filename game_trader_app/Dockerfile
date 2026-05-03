@@ -1,18 +1,24 @@
+FROM ghcr.io/cirruslabs/flutter:stable AS builder
+
+WORKDIR /app
+
+# Pull dependencies first for better layer caching.
+COPY pubspec.yaml pubspec.lock ./
+RUN flutter pub get
+
+# Copy app sources and build fresh web artifacts for each image build.
+COPY . .
+
+ARG GAMEHUB_BASE_URL=http://127.0.0.1
+RUN flutter build web --release --dart-define=GAMEHUB_BASE_URL=${GAMEHUB_BASE_URL}
+
 FROM nginx:alpine
 
-# Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
-
-# Copy our nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/build/web /usr/share/nginx/html
 
-# Copy pre-built Flutter web app
-COPY build/web /usr/share/nginx/html
-
-# Railway provides PORT env var; default to 8080
 ENV PORT=8080
-
-# Substitute $PORT into nginx config at runtime
 CMD sh -c "envsubst '\$PORT' < /etc/nginx/conf.d/default.conf > /tmp/nginx.conf && mv /tmp/nginx.conf /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
 
 EXPOSE 8080

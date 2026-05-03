@@ -4,16 +4,25 @@ import 'package:provider/provider.dart';
 import '../app_theme.dart';
 import '../services/models.dart';
 import '../services/session_manager.dart';
-import 'shared_bottom_nav.dart';
+import '../utils/format.dart';
+import '../widgets/app_buttons.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/casino_top_nav.dart';
+import '../widgets/filter_chip_row.dart';
+import '../widgets/game_card_tile.dart';
+import '../widgets/section_header.dart';
 import 'deposit_screen.dart';
-import 'game_screens/neon_rise_screen.dart';
-
 import 'game_screens/digit_dash_screen.dart';
-import 'game_screens/zero_hour_sniper_screen.dart';
-
 import 'game_screens/dual_dimension_flip_screen.dart';
-import 'game_screens/velocity_vector_screen.dart';
+import 'game_screens/mini_roulette_screen.dart';
+import 'game_screens/multiplayer_arena_screen.dart';
+import 'game_screens/multiplayer_game_catalog.dart';
 import 'game_screens/neon_perimeter_screen.dart';
+import 'game_screens/neon_rise_screen.dart';
+import 'game_screens/aviator_boom_crash_screen.dart';
+import 'game_screens/spin_bottle_screen.dart';
+import 'game_screens/velocity_vector_screen.dart';
+import 'shared_bottom_nav.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -25,30 +34,39 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   WalletBalance? _balance;
   bool _loadingBalance = false;
+  bool _showAllGames = false;
+  bool _handledInitialArenaLink = false;
+  String _selectedCategory = 'All';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshBalance();
+      _openArenaLinkIfPresent();
     });
   }
 
   Future<void> _refreshBalance() async {
     final session = context.read<SessionManager>();
-    if (!session.isAuthenticated) return;
+    if (!session.isAuthenticated) {
+      return;
+    }
+
     setState(() => _loadingBalance = true);
     try {
       final latest = await session.refreshBalance();
-      if (mounted) {
-        setState(() => _balance = latest);
+      if (!mounted) {
+        return;
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Could not load balance: $e')));
+      setState(() => _balance = latest);
+    } catch (error) {
+      if (!mounted) {
+        return;
       }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not load balance: $error')));
     } finally {
       if (mounted) {
         setState(() => _loadingBalance = false);
@@ -56,637 +74,678 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      body: Stack(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: isDesktop ? 1320 : double.infinity,
-                ),
-                child: Column(
-                  children: [
-                    _buildHeader(context, _balance, _loadingBalance),
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: _refreshBalance,
-                        child: ListView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: EdgeInsets.only(
-                            bottom: isDesktop ? 32 : 120,
-                          ),
-                          children: [
-                            _buildPromoSection(isDesktop),
-                            if (isDesktop) ...[
-                              const SizedBox(height: 8),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                child: _buildLiveFeed(),
-                              ),
-                            ],
-                            _buildFilterChips(),
-                            _buildGamesGrid(context),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+  Future<void> _openActivity(Widget screen) {
+    return Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 280),
+        reverseTransitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (context, animation, secondaryAnimation) => screen,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.025),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
             ),
-          ),
-
-          if (!isDesktop)
-            Positioned(
-              bottom: 96,
-              left: 16,
-              right: 16,
-              child: _buildLiveFeed(),
-            ),
-
-          const Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: SharedBottomNav(currentIndex: 0),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildHeader(
-    BuildContext context,
-    WalletBalance? balance,
-    bool loading,
-  ) {
-    return Container(
-      color: AppTheme.backgroundDark.withValues(alpha: 0.8),
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: const Icon(Icons.person, color: AppTheme.primaryColor),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'TOTAL BALANCE',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0,
-                      color: Color(0xFF94a3b8),
-                    ),
-                  ),
-                  Text(
-                    loading
-                        ? 'Loading...'
-                        : _formatCurrency(balance?.availableUsd ?? 0),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const DepositScreen()),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-              minimumSize: const Size(0, 40),
-            ),
-            icon: const Icon(Icons.add_circle, size: 16),
-            label: const Text('Deposit'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPromoSection(bool isDesktop) {
-    final platformGradient = [AppTheme.primaryColor, const Color(0xFF0F2A47)];
-    final supportGradient = [const Color(0xFF1C2430), AppTheme.surfaceDark];
-    final accountGradient = [const Color(0xFF233246), const Color(0xFF1A1F2C)];
-
-    final cards = [
-      _buildPromoCard(
-        title: 'Platform Highlights',
-        subtitle: 'Discover featured games and quick actions',
-        badgeText: 'FEATURED',
-        colors: platformGradient,
-        icon: Icons.dashboard_customize,
-      ),
-      _buildPromoCard(
-        title: 'Account Security',
-        subtitle: 'Protected access with Firebase authentication',
-        badgeText: 'SECURE',
-        colors: supportGradient,
-        icon: Icons.shield_outlined,
-      ),
-      _buildPromoCard(
-        title: 'Wallet Access',
-        subtitle: 'Deposit funds and track balance updates instantly',
-        badgeText: 'FINANCE',
-        colors: accountGradient,
-        icon: Icons.account_balance_wallet_outlined,
-      ),
-    ];
-
-    if (isDesktop) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            Expanded(child: cards[0]),
-            const SizedBox(width: 12),
-            Expanded(child: cards[1]),
-            const SizedBox(width: 12),
-            Expanded(child: cards[2]),
-          ],
-        ),
-      );
+  void _openArenaLinkIfPresent() {
+    if (_handledInitialArenaLink) {
+      return;
+    }
+    final query = Uri.base.queryParameters;
+    final roomCode = query['room']?.trim().toUpperCase();
+    final gameKey = query['game']?.trim().toUpperCase();
+    if (roomCode == null || roomCode.isEmpty) {
+      return;
     }
 
-    return SizedBox(
-      height: 144,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemBuilder: (context, index) =>
-            SizedBox(width: 288, child: cards[index]),
-        separatorBuilder: (context, index) => const SizedBox(width: 12),
-        itemCount: cards.length,
+    _handledInitialArenaLink = true;
+    _openActivity(
+      MultiplayerArenaScreen(
+        initialGameKey: gameKey,
+        initialRoomCode: roomCode,
       ),
     );
   }
 
-  Widget _buildPromoCard({
-    required String title,
-    required String subtitle,
-    required String badgeText,
-    required List<Color> colors,
-    required IconData icon,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  void _openMultiplayerGame(String gameKey) {
+    _openActivity(MultiplayerArenaScreen(initialGameKey: gameKey));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final allGames = _games(context);
+    final soloGamesAll = allGames
+        .where((game) => game.mode == _GameMode.solo)
+        .toList();
+    final multiplayerGamesAll = allGames
+        .where((game) => game.mode == _GameMode.multiplayer)
+        .toList();
+    final hasOverflow =
+        soloGamesAll.length > 10 || multiplayerGamesAll.length > 10;
+    final soloGames = _showAllGames
+        ? soloGamesAll
+        : soloGamesAll.take(10).toList();
+    final multiplayerGames = _showAllGames
+        ? multiplayerGamesAll
+        : multiplayerGamesAll.take(10).toList();
+    final showSolo = _selectedCategory != 'Multiplayer';
+    final showMultiplayer =
+        _selectedCategory != 'Solo' && _selectedCategory != 'Featured';
+
+    return CasinoScaffold(
+      appBar: const CasinoTopNav(title: 'Glory Grid'),
+      bottomNavigationBar: const SharedBottomNav(currentIndex: 0),
+      body: RefreshIndicator(
+        onRefresh: _refreshBalance,
+        child: ListView(
+          padding: EdgeInsets.only(top: context.space.md, bottom: 96),
+          children: [
+            _buildHeroSummary(),
+            SizedBox(height: context.space.md),
+            FilterChipRow(
+              options: const ['All', 'Featured', 'Solo', 'Multiplayer'],
+              selected: _selectedCategory,
+              onSelected: (value) => setState(() => _selectedCategory = value),
+            ),
+            SizedBox(height: context.space.md),
+            SectionHeader(
+              title: 'Featured',
+              actionLabel: hasOverflow
+                  ? (_showAllGames ? 'Show less' : 'See all')
+                  : null,
+              onAction: hasOverflow
+                  ? () => setState(() => _showAllGames = !_showAllGames)
+                  : null,
+            ),
+            SizedBox(height: context.space.md),
+            if (allGames.isNotEmpty) _buildFeaturedGamePanel(allGames.first),
+            if (showSolo) ...[
+              SizedBox(height: context.space.lg),
+              _buildModeSection(
+                title: 'Solo Games',
+                subtitle: 'Solo rounds',
+                icon: Icons.person,
+                games: soloGames,
+              ),
+            ],
+            if (showMultiplayer) ...[
+              SizedBox(height: context.space.lg),
+              _buildModeSection(
+                title: 'Multiplayer Games',
+                subtitle: 'Rooms',
+                icon: Icons.groups_2_outlined,
+                games: multiplayerGames,
+                intro: _buildMultiplayerSpotlight(),
+              ),
+            ],
+          ],
         ),
       ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -16,
-            bottom: -16,
-            child: Icon(
-              icon,
-              size: 128,
-              color: Colors.black.withValues(alpha: 0.1),
+    );
+  }
+
+  Widget _buildModeSection({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required List<_GameConfig> games,
+    Widget? intro,
+  }) {
+    if (games.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 18, color: context.colors.primary),
+            SizedBox(width: context.space.xs),
+            Text(
+              title,
+              style: context.type.bodyStrong.copyWith(
+                color: context.colors.textPrimary,
+                fontWeight: FontWeight.w800,
+              ),
             ),
+          ],
+        ),
+        SizedBox(height: context.space.xs),
+        Text(
+          subtitle,
+          style: context.type.body.copyWith(
+            color: context.colors.textSecondary,
           ),
-          Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+        ),
+        if (intro != null) ...[SizedBox(height: context.space.md), intro],
+        SizedBox(height: context.space.md),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final columns = _columnsForWidth(width);
+            final compactCards = columns == 1;
+            final aspectRatio = compactCards
+                ? 2.05
+                : columns >= 3
+                ? 0.92
+                : 0.82;
+            return GridView.builder(
+              itemCount: games.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: context.space.md,
+                mainAxisSpacing: context.space.md,
+                childAspectRatio: aspectRatio,
+              ),
+              itemBuilder: (context, index) {
+                final game = games[index];
+                return GameCardTile(
+                  title: game.title,
+                  subtitle: game.subtitle,
+                  imagePath: game.image,
+                  tag: game.tag,
+                  minStake: game.minStake,
+                  onTap: game.onTap,
+                  highlighted: game.mode == _GameMode.multiplayer,
+                  compact: compactCards,
+                );
+              },
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  int _columnsForWidth(double width) {
+    if (width >= 1200) return 4;
+    if (width >= 860) return 3;
+    if (width >= 560) return 2;
+    return 1;
+  }
+
+  Widget _buildMultiplayerSpotlight() {
+    return SurfaceCard(
+      padding: EdgeInsets.all(context.space.md),
+      backgroundColor: context.colors.primary.withValues(alpha: 0.08),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppTheme.goldButtonTop, AppTheme.goldButtonBottom],
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(9999),
-                  ),
-                  child: Text(
-                    badgeText,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
+                  borderRadius: BorderRadius.circular(context.radii.lg),
+                  border: Border.all(color: AppTheme.goldButtonBottom),
                 ),
-                Column(
+                child: const Icon(
+                  Icons.groups_2_outlined,
+                  color: AppTheme.goldText,
+                ),
+              ),
+              SizedBox(width: context.space.sm),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                      'Room Play',
+                      style: context.type.bodyStrong.copyWith(
+                        color: context.colors.textPrimary,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
+                    SizedBox(height: context.space.xxs),
                     Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.8),
+                      'Public and private rooms.',
+                      style: context.type.body.copyWith(
+                        color: context.colors.textSecondary,
+                        height: 1.35,
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChips() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: Row(children: [_buildChip('All Games', isActive: true)]),
-    );
-  }
-
-  Widget _buildChip(String label, {bool isActive = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      decoration: BoxDecoration(
-        color: isActive ? AppTheme.primaryColor : AppTheme.surfaceDark,
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: isActive ? Colors.white : const Color(0xFFcbd5e1),
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGamesGrid(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Featured Games',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              Text(
-                'See All',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryColor,
-                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              int crossAxisCount = 1;
-              if (constraints.maxWidth >= 900) {
-                crossAxisCount = 3;
-              } else if (constraints.maxWidth >= 600) {
-                crossAxisCount = 2;
-              }
-
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: crossAxisCount == 1 ? 2.0 : 1.5,
-                children: [
-                  _buildGameCard(
-                    title: 'NEON RISE',
-                    subtitle: 'Predict market peaks and valleys',
-                    badge1: 'RISE/FALL',
-                    badge1Color: AppTheme.primaryColor,
-                    badge2Title: 'WIN UP TO',
-                    badge2Value: '95%',
-                    imagePath: 'assets/images/neon_rise_bg.png',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NeonRiseScreen(),
-                        ),
-                      );
-                    },
-                  ),
-
-                  _buildGameCard(
-                    title: 'DIGIT DASH',
-                    subtitle: 'Match the last tick digit for high payout',
-                    badge1: 'MATCHES/DIFFERS',
-                    badge1Color: Colors.blueAccent,
-                    badge2Title: 'WIN UP TO',
-                    badge2Value: '900%',
-                    imagePath: 'assets/images/digit_dash_bg.png',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const DigitDashScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildGameCard(
-                    title: 'ZERO-HOUR SNIPER',
-                    subtitle: 'Pinpoint exact market ticks',
-                    badge1: 'EXACT MATCH',
-                    badge1Color: Colors.redAccent,
-                    badge2Title: 'WIN UP TO',
-                    badge2Value: '750%',
-                    imagePath: 'assets/images/zero_hour_sniper_bg.png',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ZeroHourSniperScreen(),
-                        ),
-                      );
-                    },
-                  ),
-
-                  _buildGameCard(
-                    title: 'DUAL DIMENSION FLIP',
-                    subtitle: 'Predict market trend reversals',
-                    badge1: 'REVERSAL',
-                    badge1Color: Colors.tealAccent,
-                    badge2Title: 'WIN UP TO',
-                    badge2Value: '850%',
-                    imagePath: 'assets/images/dual_dimension_flip_bg.png',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const DualDimensionFlipScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildGameCard(
-                    title: 'VELOCITY VECTOR',
-                    subtitle: 'Bet on market speed and momentum',
-                    badge1: 'VOLATILITY',
-                    badge1Color: Colors.cyanAccent,
-                    badge2Title: 'WIN UP TO',
-                    badge2Value: '550%',
-                    imagePath: 'assets/images/velocity_vector_bg.png',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const VelocityVectorScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  _buildGameCard(
-                    title: 'NEON PERIMETER',
-                    subtitle: 'Predict if price breaches boundaries',
-                    badge1: 'ENDS IN/OUT',
-                    badge1Color: Colors.pinkAccent,
-                    badge2Title: 'WIN UP TO',
-                    badge2Value: '600%',
-                    imagePath: 'assets/images/neon_perimeter_bg.png',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NeonPerimeterScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              );
-            },
+          SizedBox(height: context.space.sm),
+          Wrap(
+            spacing: context.space.xs,
+            runSpacing: context.space.xs,
+            children: const [
+              _SpotlightPill(label: 'Public Rooms'),
+              _SpotlightPill(label: 'Invites'),
+              _SpotlightPill(label: '2-4 Players'),
+              _SpotlightPill(label: '85% Pool'),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildGameCard({
-    required String title,
-    required String subtitle,
-    required String badge1,
-    required Color badge1Color,
-    required String badge2Title,
-    required String badge2Value,
-    required String imagePath,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 192,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: AppTheme.surfaceDark,
-          border: Border.all(color: AppTheme.borderDark),
-          image: DecorationImage(
-            image: AssetImage(imagePath),
-            fit: BoxFit.cover,
-            opacity: 0.5,
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Container(
+  Widget _buildFeaturedGamePanel(_GameConfig game) {
+    return SurfaceCard(
+      padding: EdgeInsets.all(context.space.sm),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(context.radii.lg),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(game.image, fit: BoxFit.cover),
+              DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
                     colors: [
-                      Colors.black.withValues(alpha: 0.8),
-                      Colors.black.withValues(alpha: 0.2),
+                      Colors.black.withValues(alpha: 0.9),
+                      Colors.black.withValues(alpha: 0.18),
                     ],
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
+              Positioned(
+                top: context.space.md,
+                left: context.space.md,
+                child: const _LivePill(label: 'Featured Game'),
+              ),
+              Positioned(
+                left: context.space.md,
+                right: context.space.md,
+                bottom: context.space.md,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      game.title,
+                      style: context.type.heroTitle.copyWith(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: context.space.xs),
+                    Text(
+                      game.subtitle,
+                      style: context.type.body.copyWith(
+                        color: Colors.white.withValues(alpha: 0.86),
+                      ),
+                    ),
+                    SizedBox(height: context.space.md),
+                    Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: badge1Color.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            badge1,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                              color: badge1Color,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
+                        _MetricPill(
+                          label: 'Entry',
+                          value: formatCurrency(game.minStake),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            fontStyle: FontStyle.italic,
-                            color: Colors.white,
-                            letterSpacing: -1,
-                          ),
+                        SizedBox(width: context.space.xs),
+                        _MetricPill(
+                          label: 'Mode',
+                          value: game.mode == _GameMode.solo ? 'Solo' : 'Room',
                         ),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFFcbd5e1),
-                          ),
+                        const Spacer(),
+                        PrimaryButton(
+                          label: 'Play',
+                          icon: Icons.play_arrow_rounded,
+                          onPressed: game.onTap,
                         ),
                       ],
                     ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        badge2Title,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF94a3b8),
-                        ),
-                      ),
-                      Text(
-                        badge2Value,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.greenAccent,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildLiveFeed() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0b0e11).withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(9999),
-        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.2)),
-      ),
-      child: Row(
+  Widget _buildHeroSummary() {
+    final available = _balance?.availableUsd ?? 0;
+
+    return SurfaceCard(
+      padding: EdgeInsets.all(context.space.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Colors.greenAccent,
-                  shape: BoxShape.circle,
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: context.colors.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(context.radii.pill),
+                  border: Border.all(
+                    color: context.colors.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Icon(Icons.person, color: context.colors.primary),
+              ),
+              SizedBox(width: context.space.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Balance',
+                      style: context.type.label.copyWith(
+                        color: context.colors.textSecondary,
+                      ),
+                    ),
+                    SizedBox(height: context.space.xxs),
+                    Text(
+                      _loadingBalance
+                          ? 'Loading...'
+                          : formatCurrency(available),
+                      style: context.type.heroTitle.copyWith(
+                        color: context.colors.textPrimary,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: context.space.xs),
+                    Wrap(
+                      spacing: context.space.xs,
+                      runSpacing: context.space.xs,
+                      children: const [
+                        _LivePill(label: '428 Live'),
+                        _LivePill(label: 'Live Wallet'),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              const Text(
-                'LIVE FEED',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF94a3b8),
-                ),
+              PrimaryButton(
+                label: 'Deposit',
+                icon: Icons.add,
+                onPressed: () {
+                  _openActivity(const DepositScreen());
+                },
               ),
             ],
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              '@User_882 just won \$142.50 in Neon Rise',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: Colors.white,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
           ),
         ],
       ),
     );
   }
 
-  String _formatCurrency(double value) {
-    return '\$${value.toStringAsFixed(2)}';
+  List<_GameConfig> _games(BuildContext context) {
+    return [
+      _GameConfig(
+        title: 'Neon Rise',
+        subtitle: 'Market direction',
+        image: 'assets/images/neon_rise_bg.png',
+        tag: 'FEATURED',
+        minStake: 1,
+        mode: _GameMode.solo,
+        onTap: () {
+          _openActivity(const NeonRiseScreen());
+        },
+      ),
+      _GameConfig(
+        title: 'Digit Dash',
+        subtitle: 'Last digit',
+        image: 'assets/images/digit_dash_bg.png',
+        tag: 'POPULAR',
+        minStake: 1,
+        mode: _GameMode.solo,
+        onTap: () {
+          _openActivity(const DigitDashScreen());
+        },
+      ),
+      _GameConfig(
+        title: 'Mini Roulette',
+        subtitle: 'Color or digit',
+        image: 'assets/images/screen_14.png',
+        tag: 'NEW',
+        minStake: 1,
+        mode: _GameMode.solo,
+        onTap: () {
+          _openActivity(const MiniRouletteScreen());
+        },
+      ),
+      _GameConfig(
+        title: 'Even or Odd',
+        subtitle: 'Odd or even',
+        image: 'assets/images/dual_dimension_flip_bg.png',
+        tag: 'NEW',
+        minStake: 1,
+        mode: _GameMode.solo,
+        onTap: () {
+          _openActivity(const DualDimensionFlipScreen());
+        },
+      ),
+      _GameConfig(
+        title: 'Velocity Vector',
+        subtitle: 'Momentum',
+        image: 'assets/images/velocity_vector_bg.png',
+        tag: 'HOT',
+        minStake: 2,
+        mode: _GameMode.solo,
+        onTap: () {
+          _openActivity(const VelocityVectorScreen());
+        },
+      ),
+      _GameConfig(
+        title: 'Neon Perimeter',
+        subtitle: 'Boundary break',
+        image: 'assets/images/neon_perimeter_bg.png',
+        tag: 'TRENDING',
+        minStake: 1,
+        mode: _GameMode.solo,
+        onTap: () {
+          _openActivity(const NeonPerimeterScreen());
+        },
+      ),
+      _GameConfig(
+        title: 'Aviator Boom/Crash',
+        subtitle: 'Boom or crash',
+        image: 'assets/images/screen_11.png',
+        tag: 'TRENDING',
+        minStake: 1,
+        mode: _GameMode.solo,
+        onTap: () {
+          _openActivity(const AviatorBoomCrashScreen());
+        },
+      ),
+      _GameConfig(
+        title: 'Spin the Bottle',
+        subtitle: 'Left or right',
+        image: 'assets/images/screen_12.png',
+        tag: 'NEW',
+        minStake: 1,
+        mode: _GameMode.solo,
+        onTap: () {
+          _openActivity(const SpinBottleScreen.solo());
+        },
+      ),
+      ...multiplayerGameCatalog.map(_multiplayerGameConfig),
+    ];
+  }
+
+  _GameConfig _multiplayerGameConfig(MultiplayerGameDefinition game) {
+    return _GameConfig(
+      title: game.title,
+      subtitle: game.modeSummary,
+      image: game.imagePath,
+      tag: game.cardTag,
+      minStake: game.minStake,
+      mode: _GameMode.multiplayer,
+      onTap: () {
+        _openMultiplayerGame(game.key);
+      },
+    );
+  }
+}
+
+enum _GameMode { solo, multiplayer }
+
+class _GameConfig {
+  const _GameConfig({
+    required this.title,
+    required this.subtitle,
+    required this.image,
+    required this.tag,
+    required this.minStake,
+    required this.mode,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final String image;
+  final String tag;
+  final num minStake;
+  final _GameMode mode;
+  final VoidCallback onTap;
+}
+
+class _SpotlightPill extends StatelessWidget {
+  const _SpotlightPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.space.sm,
+        vertical: context.space.xs,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.bgCard,
+        borderRadius: BorderRadius.circular(context.radii.pill),
+        border: Border.all(
+          color: context.colors.primary.withValues(alpha: 0.28),
+        ),
+      ),
+      child: Text(
+        label,
+        style: context.type.label.copyWith(
+          color: context.colors.textPrimary,
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricPill extends StatelessWidget {
+  const _MetricPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.space.sm,
+        vertical: context.space.xs,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(context.radii.pill),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: context.type.label.copyWith(
+              color: Colors.white.withValues(alpha: 0.68),
+              fontSize: 11,
+            ),
+          ),
+          SizedBox(width: context.space.xs),
+          Text(
+            value,
+            style: context.type.label.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LivePill extends StatelessWidget {
+  const _LivePill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.space.sm,
+        vertical: context.space.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.primary.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(context.radii.pill),
+        border: Border.all(
+          color: context.colors.primary.withValues(alpha: 0.32),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: context.colors.primary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          SizedBox(width: context.space.xs),
+          Text(
+            label,
+            style: context.type.label.copyWith(
+              color: context.colors.primary,
+              fontWeight: FontWeight.w800,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

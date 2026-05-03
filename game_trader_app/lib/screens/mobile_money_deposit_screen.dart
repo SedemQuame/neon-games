@@ -7,6 +7,13 @@ import 'package:provider/provider.dart';
 import '../app_theme.dart';
 import '../services/api_client.dart';
 import '../services/session_manager.dart';
+import '../utils/format.dart';
+import '../widgets/app_buttons.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/casino_top_nav.dart';
+import '../widgets/price_label.dart';
+import '../widgets/section_header.dart';
+import '../widgets/tag_badge.dart';
 
 class MobileMoneyDepositScreen extends StatefulWidget {
   const MobileMoneyDepositScreen({super.key});
@@ -46,272 +53,152 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      body: SafeArea(
+    return CasinoScaffold(
+      appBar: const CasinoTopNav(title: 'Mobile Money', showBackButton: true),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(vertical: context.space.md),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildHeader(context),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Mobile Money',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: -1,
-                      ),
+            const SectionHeader(title: 'Mobile Money'),
+            SizedBox(height: context.space.lg),
+            SurfaceCard(
+              backgroundColor: context.colors.primary.withValues(alpha: 0.06),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const TagBadge(label: 'Transfer'),
+                  SizedBox(height: context.space.sm),
+                  Text(
+                    'Send to',
+                    style: context.type.body.copyWith(
+                      color: context.colors.textSecondary,
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Fund your account directly from your mobile wallet.',
-                      style: TextStyle(color: Color(0xFF94a3b8), fontSize: 14),
+                  ),
+                  SizedBox(height: context.space.xs),
+                  Text(
+                    '0546744163 - Sedem Amekpewu',
+                    style: context.type.bodyStrong.copyWith(
+                      color: context.colors.textPrimary,
                     ),
-                    const SizedBox(height: 32),
-
-                    // Manual Instructions
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withValues(alpha: 0.1),
-                        border: Border.all(
-                          color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Please send your deposit to:',
-                            style: TextStyle(color: Colors.white, fontSize: 14),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            // TODO: Replace with actual phone number from a merchant account.
-                            '0546744163 - Sedem Amekpewu',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'After sending, fill the form below to confirm your deposit.',
-                            style: TextStyle(
-                              color: Color(0xFF94a3b8),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
+                  ),
+                  SizedBox(height: context.space.xs),
+                  Text(
+                    'Then confirm below.',
+                    style: context.type.body.copyWith(
+                      color: context.colors.textSecondary,
                     ),
-                    const SizedBox(height: 24),
-
-                    // Network Selection
-                    const Padding(
-                      padding: EdgeInsets.only(left: 4, bottom: 8),
-                      child: Text(
-                        'Select Network',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFcbd5e1),
-                        ),
-                      ),
-                    ),
-                    _buildNetworkSelector(),
-                    const SizedBox(height: 24),
-
-                    // Phone Number Input
-                    _buildTextField(
-                      label: 'Sending Number',
-                      icon: Icons.phone_android,
-                      placeholder: 'Number used to send money',
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Amount Input
-                    _buildTextField(
-                      label: 'Amount (\$)',
-                      icon: Icons.attach_money,
-                      placeholder: 'Enter deposit amount',
-                      controller: _amountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Min: \$5.00',
-                          style: TextStyle(
-                            color: Color(0xFF94a3b8),
-                            fontSize: 12,
-                          ),
-                        ),
-                        const Text(
-                          'Max: \$5,000.00',
-                          style: TextStyle(
-                            color: Color(0xFF94a3b8),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Proof of Payment Upload
-                    const Padding(
-                      padding: EdgeInsets.only(left: 4, bottom: 8),
-                      child: Text(
-                        'Proof of Payment',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFcbd5e1),
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        height: 120,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceDark,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _proofImage != null
-                                ? AppTheme.primaryColor
-                                : AppTheme.borderDark,
-                          ),
-                        ),
-                        child: _proofImage != null
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: Image.file(
-                                  _proofImage!,
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                ),
-                              )
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.cloud_upload_outlined,
-                                    size: 32,
-                                    color: AppTheme.primaryColor.withValues(
-                                      alpha: 0.7,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Upload Screenshot',
-                                    style: TextStyle(
-                                      color: Color(0xFF94a3b8),
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-
-                    // Proceed Button
-                    Container(
-                      height: 56,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(9999),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.primaryColor.withValues(alpha: 0.3),
-                            blurRadius: 20,
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        onPressed: (_loading || !_isFormValid)
-                            ? null
-                            : () => _submitPayment(context),
-                        child: _loading
-                            ? const CircularProgressIndicator(strokeWidth: 2)
-                            : const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'I have paid',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Icon(Icons.check_circle_outline, size: 20),
-                                ],
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
+            SizedBox(height: context.space.md),
+            _buildNetworkSelector(),
+            SizedBox(height: context.space.md),
+            _buildTextField(
+              label: 'Sender',
+              icon: Icons.phone_android,
+              placeholder: 'Phone number',
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+            ),
+            SizedBox(height: context.space.md),
+            _buildTextField(
+              label: 'Amount',
+              icon: Icons.attach_money,
+              placeholder: 'Amount',
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+            ),
+            SizedBox(height: context.space.xs),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                PriceLabel(value: 5, label: 'Min Stake'),
+                PriceLabel(value: 5000, label: 'From'),
+              ],
+            ),
+            SizedBox(height: context.space.md),
+            SurfaceCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Proof',
+                    style: context.type.label.copyWith(
+                      color: context.colors.textSecondary,
+                    ),
+                  ),
+                  SizedBox(height: context.space.xs),
+                  GestureDetector(
+                    onTap: _pickImage,
+                    child: Container(
+                      height: 140,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: context.colors.bgSurface,
+                        borderRadius: BorderRadius.circular(context.radii.lg),
+                        border: Border.all(
+                          color: _proofImage != null
+                              ? context.colors.primary
+                              : context.colors.border,
+                        ),
+                      ),
+                      child: _proofImage != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(
+                                context.radii.lg,
+                              ),
+                              child: Image.file(
+                                _proofImage!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                              ),
+                            )
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.cloud_upload_outlined,
+                                  size: 32,
+                                  color: context.colors.primary,
+                                ),
+                                SizedBox(height: context.space.xs),
+                                Text(
+                                  'Upload',
+                                  style: context.type.body.copyWith(
+                                    color: context.colors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: context.space.xl),
+            PrimaryButton(
+              label: _loading ? 'Submitting...' : 'Confirm',
+              icon: Icons.check_circle_outline,
+              onPressed: (_loading || !_isFormValid)
+                  ? null
+                  : () => _submitPayment(context),
+              expanded: true,
+            ),
+            SizedBox(height: context.space.xs),
+            Text(
+              'Amount: ${formatCurrency(double.tryParse(_amountController.text) ?? 0)}',
+              textAlign: TextAlign.center,
+              style: context.type.label.copyWith(
+                color: context.colors.textSecondary,
+              ),
+            ),
+            SizedBox(height: context.space.xl),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceDark,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.borderDark),
-              ),
-              child: const Icon(
-                Icons.arrow_back,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          ),
-          const Text(
-            'MOBILE MONEY',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2.0,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 40),
-        ],
       ),
     );
   }
@@ -323,53 +210,45 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
       {'name': 'AirtelTigo Money', 'color': Colors.blueAccent},
     ];
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceDark,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.borderDark),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedNetwork,
-          dropdownColor: AppTheme.surfaceDark,
-          isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-          items: networks.map((network) {
-            return DropdownMenuItem<String>(
-              value: network['name'] as String,
-              child: Row(
-                children: [
-                  Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: network['color'] as Color,
-                      shape: BoxShape.circle,
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Network',
+            style: context.type.label.copyWith(
+              color: context.colors.textSecondary,
+            ),
+          ),
+          SizedBox(height: context.space.xs),
+          DropdownButtonFormField<String>(
+            initialValue: selectedNetwork,
+            items: networks.map((network) {
+              return DropdownMenuItem<String>(
+                value: network['name'] as String,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: network['color'] as Color,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    network['name'] as String,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: (String? newValue) {
-            if (newValue != null) {
-              setState(() {
-                selectedNetwork = newValue;
-              });
-            }
-          },
-        ),
+                    SizedBox(width: context.space.sm),
+                    Text(network['name'] as String),
+                  ],
+                ),
+              );
+            }).toList(),
+            onChanged: (newValue) {
+              if (newValue != null) {
+                setState(() => selectedNetwork = newValue);
+              }
+            },
+          ),
+        ],
       ),
     );
   }
@@ -381,44 +260,27 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
     TextInputType? keyboardType,
     TextEditingController? controller,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
+    return SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
             label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFFcbd5e1),
+            style: context.type.label.copyWith(
+              color: context.colors.textSecondary,
             ),
           ),
-        ),
-        TextFormField(
-          controller: controller,
-          keyboardType: keyboardType,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: placeholder,
-            prefixIcon: Icon(icon),
-            fillColor: AppTheme.backgroundDark,
-            filled: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppTheme.borderDark),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppTheme.borderDark),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: AppTheme.primaryColor),
+          SizedBox(height: context.space.xs),
+          TextFormField(
+            controller: controller,
+            keyboardType: keyboardType,
+            decoration: InputDecoration(
+              hintText: placeholder,
+              prefixIcon: Icon(icon),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -441,6 +303,7 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
       );
       return;
     }
+
     final amount = double.tryParse(_amountController.text) ?? 0;
     if (amount <= 0 || _phoneController.text.isEmpty || _proofImage == null) {
       messenger.showSnackBar(
@@ -450,6 +313,7 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
       );
       return;
     }
+
     setState(() => _loading = true);
     try {
       final response = await session.paymentService.initiateMoMoDeposit(
@@ -469,10 +333,10 @@ class _MobileMoneyDepositScreenState extends State<MobileMoneyDepositScreen> {
       if (context.mounted) {
         Navigator.pop(context);
       }
-    } on ApiException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Payment failed: $e')));
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('Payment failed: $error')));
     } finally {
       if (mounted) {
         setState(() => _loading = false);

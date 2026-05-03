@@ -44,6 +44,12 @@ type PlaceBetRequest struct {
 	TraceID    string                 `json:"traceId,omitempty"`
 }
 
+type CashOutBetRequest struct {
+	SessionID  string  `json:"sessionId"`
+	TraceID    string  `json:"traceId,omitempty"`
+	Multiplier float64 `json:"multiplier,omitempty"`
+}
+
 type BetAcknowledgement struct {
 	SessionID  string  `json:"sessionId"`
 	StakeUsd   float64 `json:"stakeUsd"`
@@ -142,6 +148,50 @@ func (m *Manager) PlaceBet(ctx context.Context, userID string, req PlaceBetReque
 		NewBalance: bal.AvailableUsd,
 		TraceID:    traceID,
 	}, nil
+}
+
+func (m *Manager) CashOutBet(ctx context.Context, userID string, req CashOutBetRequest) error {
+	if req.SessionID == "" {
+		return errors.New("sessionId is required")
+	}
+
+	var doc bson.M
+	err := m.db.Collection("game_sessions").FindOne(ctx, bson.M{
+		"sessionId": req.SessionID,
+		"userId":    userID,
+		"status":    "PENDING",
+	}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return errors.New("active round not found")
+	}
+	if err != nil {
+		return err
+	}
+
+	if req.TraceID == "" {
+		if traceID, ok := doc["traceId"].(string); ok {
+			req.TraceID = traceID
+		}
+	}
+	gameType, _ := doc["gameType"].(string)
+
+	payload, _ := json.Marshal(map[string]interface{}{
+		"sessionId":  req.SessionID,
+		"userId":     userID,
+		"gameType":   gameType,
+		"traceId":    req.TraceID,
+		"multiplier": req.Multiplier,
+		"createdAt":  time.Now().UnixMilli(),
+	})
+	queue := m.cfg.OrderQueue + ":cashout"
+	if err := m.rdb.RPush(ctx, queue, payload).Err(); err != nil {
+		return err
+	}
+	m.rdb.Expire(ctx, queue, 12*time.Hour)
+
+	log.Printf("[trace=%s] queued cashout session=%s user=%s multiplier=%.2f",
+		req.TraceID, req.SessionID, userID, req.Multiplier)
+	return nil
 }
 
 func (m *Manager) Subscribe(userID string) (chan []byte, func()) {

@@ -3,10 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
+import '../screens/dashboard_screen.dart';
 import '../services/api_client.dart';
 import '../services/session_manager.dart';
+import '../widgets/app_buttons.dart';
+import '../widgets/app_shell.dart';
+import '../widgets/casino_top_nav.dart';
 
-enum _AuthProviderAction { google, apple, x, guest }
+enum _AuthProviderAction { google, apple, guest }
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -17,155 +21,328 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   _AuthProviderAction? _activeProvider;
+  bool _redirecting = false;
 
   bool get _busy => _activeProvider != null;
 
   @override
   Widget build(BuildContext context) {
     final session = context.watch<SessionManager>();
-    if (!session.isReady) {
-      return const Scaffold(
-        backgroundColor: AppTheme.backgroundDark,
-        body: Center(
-          child: CircularProgressIndicator(color: AppTheme.primaryColor),
-        ),
-      );
-    }
+    final sessionReady = session.isReady;
 
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final horizontalPadding = width >= 900 ? width * 0.12 : 24.0;
-            final cardWidth = width >= 1100
-                ? 420.0
-                : width >= 700
-                ? 440.0
-                : double.infinity;
+    final wide = MediaQuery.of(context).size.width >= 980;
 
-            return Center(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: horizontalPadding,
-                  vertical: 32,
-                ),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: cardWidth),
-                  child: _buildAuthCard(),
+    return CasinoScaffold(
+      appBar: const CasinoTopNav(title: 'Glory Grid'),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: wide ? 1120 : 460),
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(vertical: context.space.xl),
+            child: TweenAnimationBuilder<double>(
+              duration: const Duration(milliseconds: 380),
+              curve: Curves.easeOutCubic,
+              tween: Tween(begin: 0, end: 1),
+              builder: (context, value, child) => Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, (1 - value) * 14),
+                  child: child,
                 ),
               ),
-            );
-          },
+              child: wide
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 11, child: _buildIntroPanel(context)),
+                        SizedBox(width: context.space.lg),
+                        Expanded(
+                          flex: 9,
+                          child: _buildAuthPanel(context, sessionReady),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildIntroPanel(context),
+                        SizedBox(height: context.space.md),
+                        _buildAuthPanel(context, sessionReady),
+                      ],
+                    ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildAuthCard() {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceDark.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.borderDark),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryColor.withValues(alpha: 0.12),
-            blurRadius: 30,
-            spreadRadius: 2,
+  Widget _buildIntroPanel(BuildContext context) {
+    final compact = MediaQuery.of(context).size.width < 600;
+
+    return SurfaceCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(context.radii.lg),
+            ),
+            child: AspectRatio(
+              aspectRatio: compact ? 2.05 : 1.75,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/images/neon_perimeter_bg.png',
+                    fit: BoxFit.cover,
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.08),
+                          Colors.black.withValues(alpha: 0.74),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: context.space.md,
+                    left: context.space.md,
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.space.sm,
+                        vertical: context.space.xs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor,
+                        borderRadius: BorderRadius.circular(context.radii.pill),
+                        border: Border.all(color: AppTheme.goldButtonBottom),
+                      ),
+                      child: Text(
+                        'FAST',
+                        style: context.type.label.copyWith(
+                          color: AppTheme.goldText,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: context.space.lg,
+                    right: context.space.lg,
+                    bottom: context.space.lg,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Play fast.\nSettle live.',
+                          style: context.type.heroTitle.copyWith(
+                            color: Colors.white,
+                            fontSize: compact ? 28 : 34,
+                            fontWeight: FontWeight.w900,
+                            height: 1.05,
+                          ),
+                        ),
+                        SizedBox(height: context.space.sm),
+                        Text(
+                          'Guest entry. Room games. Live wallet.',
+                          style: context.type.bodyStrong.copyWith(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.all(context.space.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: context.space.xs,
+                  runSpacing: context.space.xs,
+                  children: const [
+                    _OnboardingPill(
+                      icon: Icons.person_outline,
+                      label: 'Guest first',
+                    ),
+                    _OnboardingPill(
+                      icon: Icons.groups_2_outlined,
+                      label: 'Rooms',
+                    ),
+                    _OnboardingPill(
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'Wallet',
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAuthPanel(BuildContext context, bool sessionReady) {
+    return SurfaceCard(
+      padding: EdgeInsets.all(context.space.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppTheme.primaryColor.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppTheme.primaryColor.withValues(alpha: 0.4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor,
+                borderRadius: BorderRadius.circular(context.radii.lg),
+                border: Border.all(color: AppTheme.goldButtonBottom),
+              ),
+              child: const Icon(
+                Icons.sports_esports,
+                color: AppTheme.goldText,
+                size: 26,
               ),
             ),
-            child: const Icon(
-              Icons.sports_esports,
-              color: AppTheme.primaryColor,
-              size: 30,
+          ),
+          SizedBox(height: context.space.md),
+          Text(
+            'Start',
+            style: context.type.heroTitle.copyWith(
+              color: context.colors.textPrimary,
+              fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 18),
-          const Text(
-            'Welcome to Glory Grid',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.8,
+          SizedBox(height: context.space.xs),
+          Text(
+            'Guest or account.',
+            style: context.type.body.copyWith(
+              color: context.colors.textSecondary,
+              height: 1.35,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Sign in with your preferred provider. Authentication is powered by Firebase across web and mobile.',
-            style: TextStyle(
-              color: Color(0xFF94a3b8),
-              fontSize: 14,
-              height: 1.45,
+          SizedBox(height: context.space.lg),
+          Container(
+            padding: EdgeInsets.all(context.space.md),
+            decoration: BoxDecoration(
+              color: context.colors.bgSurface,
+              borderRadius: BorderRadius.circular(context.radii.lg),
+              border: Border.all(
+                color: AppTheme.primaryColor.withValues(alpha: 0.42),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.space.xs,
+                        vertical: context.space.xxs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryColor,
+                        borderRadius: BorderRadius.circular(context.radii.pill),
+                        border: Border.all(color: AppTheme.goldButtonBottom),
+                      ),
+                      child: Text(
+                        'FAST',
+                        style: context.type.label.copyWith(
+                          color: AppTheme.goldText,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    const Icon(
+                      Icons.flash_on_rounded,
+                      size: 18,
+                      color: AppTheme.primaryColor,
+                    ),
+                  ],
+                ),
+                SizedBox(height: context.space.sm),
+                Text(
+                  'Guest',
+                  style: context.type.bodyStrong.copyWith(
+                    color: context.colors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
+                ),
+                SizedBox(height: context.space.xxs),
+                Text(
+                  'No signup.',
+                  style: context.type.body.copyWith(
+                    color: context.colors.textSecondary,
+                    height: 1.35,
+                  ),
+                ),
+                SizedBox(height: context.space.md),
+                PrimaryButton(
+                  expanded: true,
+                  onPressed: (_busy || !sessionReady) ? null : _signInAsGuest,
+                  label: !sessionReady
+                      ? 'Loading...'
+                      : _activeProvider == _AuthProviderAction.guest
+                      ? 'Signing in...'
+                      : 'Enter Lobby',
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: context.space.lg),
+          Row(
+            children: [
+              Expanded(child: Divider(color: context.colors.border, height: 1)),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: context.space.sm),
+                child: Text(
+                  'or',
+                  style: context.type.label.copyWith(
+                    color: context.colors.textSecondary,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: context.colors.border, height: 1)),
+            ],
+          ),
+          SizedBox(height: context.space.lg),
           _providerButton(
-            label: 'Continue with Google',
+            label: 'Google',
             icon: Icons.g_mobiledata_rounded,
             action: _AuthProviderAction.google,
             onPressed: _signInWithGoogle,
+            sessionReady: sessionReady,
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: context.space.sm),
           _providerButton(
-            label: 'Continue with Apple',
+            label: 'Apple',
             icon: Icons.apple,
             action: _AuthProviderAction.apple,
             onPressed: _signInWithApple,
+            sessionReady: sessionReady,
           ),
-          const SizedBox(height: 12),
-          _providerButton(
-            label: 'Continue with X',
-            icon: Icons.alternate_email,
-            action: _AuthProviderAction.x,
-            onPressed: _signInWithX,
-          ),
-          const SizedBox(height: 14),
-          OutlinedButton(
-            onPressed: _busy ? null : _signInAsGuest,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: _activeProvider == _AuthProviderAction.guest
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text(
-                    'Continue as Guest',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'Guest mode uses Firebase anonymous auth and can be linked to an SSO account later.',
-            style: TextStyle(
-              color: Color(0xFF64748b),
-              fontSize: 12,
-              height: 1.4,
+          SizedBox(height: context.space.md),
+          Text(
+            'Accounts sync across devices.',
+            style: context.type.label.copyWith(
+              color: context.colors.textSecondary,
             ),
             textAlign: TextAlign.center,
           ),
@@ -179,24 +356,13 @@ class _AuthScreenState extends State<AuthScreen> {
     required IconData icon,
     required _AuthProviderAction action,
     required Future<void> Function() onPressed,
+    required bool sessionReady,
   }) {
-    return ElevatedButton.icon(
-      onPressed: _busy ? null : onPressed,
-      icon: Icon(icon, size: 20),
-      label: _activeProvider == action
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-      style: ElevatedButton.styleFrom(
-        minimumSize: const Size.fromHeight(52),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+    return SecondaryButton(
+      expanded: true,
+      onPressed: (_busy || !sessionReady) ? null : onPressed,
+      icon: icon,
+      label: _activeProvider == action ? 'Please wait...' : label,
     );
   }
 
@@ -212,12 +378,6 @@ class _AuthScreenState extends State<AuthScreen> {
     });
   }
 
-  Future<void> _signInWithX() {
-    return _runAction(_AuthProviderAction.x, () async {
-      await context.read<SessionManager>().signInWithX();
-    });
-  }
-
   Future<void> _signInAsGuest() {
     return _runAction(_AuthProviderAction.guest, () async {
       await context.read<SessionManager>().startGuestMode();
@@ -228,10 +388,20 @@ class _AuthScreenState extends State<AuthScreen> {
     _AuthProviderAction action,
     Future<void> Function() fn,
   ) async {
-    if (_busy) return;
+    if (_busy) {
+      return;
+    }
+
     setState(() => _activeProvider = action);
     try {
       await fn();
+      if (!mounted) {
+        return;
+      }
+      if (context.read<SessionManager>().isAuthenticated) {
+        await _openGuestLobby();
+        return;
+      }
     } on ApiException catch (error) {
       _showError(error.message);
     } on FirebaseAuthException catch (error) {
@@ -239,10 +409,21 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (error) {
       _showError('Authentication failed: $error');
     } finally {
-      if (mounted) {
+      if (mounted && !_redirecting) {
         setState(() => _activeProvider = null);
       }
     }
+  }
+
+  Future<void> _openGuestLobby() async {
+    if (_redirecting || !mounted) {
+      return;
+    }
+    _redirecting = true;
+    await Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      (route) => false,
+    );
   }
 
   String _firebaseAuthError(FirebaseAuthException error) {
@@ -259,9 +440,49 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   void _showError(String message) {
-    if (!mounted) return;
+    if (!mounted) {
+      return;
+    }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _OnboardingPill extends StatelessWidget {
+  const _OnboardingPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.space.sm,
+        vertical: context.space.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppTheme.gameSurface,
+        borderRadius: BorderRadius.circular(context.radii.pill),
+        border: Border.all(
+          color: AppTheme.primaryColor.withValues(alpha: 0.38),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppTheme.primaryColor),
+          SizedBox(width: context.space.xxs),
+          Text(
+            label,
+            style: context.type.label.copyWith(
+              color: AppTheme.primaryColor,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

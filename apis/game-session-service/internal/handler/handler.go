@@ -162,6 +162,27 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 				"newBalance": resp.NewBalance,
 				"traceId":    resp.TraceID,
 			})
+		case "CASH_OUT_BET":
+			var req session.CashOutBetRequest
+			if err := json.Unmarshal(data, &req); err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ERROR", "message": "bad cash-out payload"})
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			err := h.mgr.CashOutBet(ctx, userID, req)
+			cancel()
+			if err != nil {
+				conn.WriteJSON(fiber.Map{
+					"type":    "ERROR",
+					"message": err.Error(),
+				})
+				continue
+			}
+			conn.WriteJSON(fiber.Map{
+				"type":      "CASH_OUT_REQUESTED",
+				"sessionId": req.SessionID,
+				"traceId":   req.TraceID,
+			})
 		case "CREATE_ROOM":
 			var req session.CreateRoomRequest
 			if err := json.Unmarshal(data, &req); err != nil {

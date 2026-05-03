@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,13 +19,16 @@ import (
 )
 
 type Manager struct {
-	rdb           *redis.Client
-	wallet        *wallet.Client
-	cfg           *config.Config
-	accounts      []*derivAccount
-	simulate      bool
-	rng           *rand.Rand
-	bounceTracker *BounceTracker
+	rdb             *redis.Client
+	wallet          *wallet.Client
+	cfg             *config.Config
+	accounts        []*derivAccount
+	simulate        bool
+	rng             *rand.Rand
+	bounceTracker   *BounceTracker
+	activeMu        sync.Mutex
+	activeTrades    map[string]*activeTrade
+	pendingCashouts map[string]cashoutRequest
 }
 
 type tradeOrder struct {
@@ -42,14 +46,30 @@ type tradeSettlement struct {
 	ContractID string
 }
 
+type cashoutRequest struct {
+	SessionID  string  `json:"sessionId"`
+	UserID     string  `json:"userId"`
+	GameType   string  `json:"gameType"`
+	TraceID    string  `json:"traceId"`
+	Multiplier float64 `json:"multiplier"`
+	CreatedAt  int64   `json:"createdAt"`
+}
+
+type activeTrade struct {
+	order     tradeOrder
+	cashoutCh chan cashoutRequest
+}
+
 func NewManager(rdb *redis.Client, walletClient *wallet.Client, cfg *config.Config) *Manager {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	mgr := &Manager{
-		rdb:           rdb,
-		wallet:        walletClient,
-		cfg:           cfg,
-		rng:           rng,
-		bounceTracker: newBounceTracker(cfg, rng),
+		rdb:             rdb,
+		wallet:          walletClient,
+		cfg:             cfg,
+		rng:             rng,
+		bounceTracker:   newBounceTracker(cfg, rng),
+		activeTrades:    make(map[string]*activeTrade),
+		pendingCashouts: make(map[string]cashoutRequest),
 	}
 
 	if cfg.BounceRate > 0 {
@@ -77,6 +97,7 @@ func NewManager(rdb *redis.Client, walletClient *wallet.Client, cfg *config.Conf
 
 func (m *Manager) Start(ctx context.Context) {
 	log.Printf("Trader pool consuming queue %s", m.cfg.OrderQueue)
+	go m.startCashoutConsumer(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -120,7 +141,9 @@ func (m *Manager) processOrder(order tradeOrder) {
 	}
 
 	if m.simulate {
-		m.simulateOrder(order)
+		active := m.registerActive(order)
+		defer m.unregisterActive(order.SessionID)
+		m.simulateOrder(order, active)
 		return
 	}
 
@@ -131,9 +154,12 @@ func (m *Manager) processOrder(order tradeOrder) {
 		return
 	}
 
+	active := m.registerActive(order)
+	defer m.unregisterActive(order.SessionID)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	settlement, err := account.execute(ctx, order)
+	settlement, err := account.execute(ctx, order, active)
 	if err != nil {
 		log.Printf("[trace=%s][%s] deriv execution failed: %v", order.TraceID, account.id, err)
 		m.refundOrder(order, err)
@@ -144,9 +170,31 @@ func (m *Manager) processOrder(order tradeOrder) {
 	}
 }
 
-func (m *Manager) simulateOrder(order tradeOrder) {
+func (m *Manager) simulateOrder(order tradeOrder, active *activeTrade) {
 	delay := m.randomDelay()
-	time.Sleep(delay)
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case req := <-active.cashoutCh:
+		multiplier := req.Multiplier
+		if multiplier < 1.01 {
+			multiplier = 1.01
+		}
+		if multiplier > m.cfg.PayoutMultiplier {
+			multiplier = m.cfg.PayoutMultiplier
+		}
+		settlement := &tradeSettlement{
+			Outcome:    "WIN",
+			PayoutUsd:  order.StakeUsd * multiplier,
+			ContractID: "SIMULATED_CASHOUT",
+		}
+		if err := m.finalize(order, settlement); err != nil {
+			log.Printf("[trace=%s] simulated cashout finalize failed: %v", order.TraceID, err)
+		}
+		return
+	case <-timer.C:
+	}
 
 	outcome := "LOSS"
 	payout := 0.0
@@ -161,6 +209,98 @@ func (m *Manager) simulateOrder(order tradeOrder) {
 	}
 	if err := m.finalize(order, settlement); err != nil {
 		log.Printf("[trace=%s] simulated finalize failed: %v", order.TraceID, err)
+	}
+}
+
+func (m *Manager) startCashoutConsumer(ctx context.Context) {
+	queue := m.cashoutQueue()
+	log.Printf("Trader pool consuming cashout queue %s", queue)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		result, err := m.rdb.BRPop(ctx, 0*time.Second, queue).Result()
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			continue
+		}
+		if len(result) < 2 {
+			continue
+		}
+		var req cashoutRequest
+		if err := json.Unmarshal([]byte(result[1]), &req); err != nil {
+			log.Printf("invalid cashout payload: %v", err)
+			continue
+		}
+		m.requestCashout(req)
+	}
+}
+
+func (m *Manager) cashoutQueue() string {
+	return m.cfg.OrderQueue + ":cashout"
+}
+
+func (m *Manager) registerActive(order tradeOrder) *activeTrade {
+	active := &activeTrade{
+		order:     order,
+		cashoutCh: make(chan cashoutRequest, 1),
+	}
+	m.activeMu.Lock()
+	m.activeTrades[order.SessionID] = active
+	pending, hasPending := m.pendingCashouts[order.SessionID]
+	if hasPending {
+		delete(m.pendingCashouts, order.SessionID)
+	}
+	m.activeMu.Unlock()
+	if hasPending {
+		select {
+		case active.cashoutCh <- pending:
+			log.Printf("[trace=%s] applied pending cashout session=%s multiplier=%.2f",
+				pending.TraceID, pending.SessionID, pending.Multiplier)
+		default:
+		}
+	}
+	return active
+}
+
+func (m *Manager) unregisterActive(sessionID string) {
+	m.activeMu.Lock()
+	delete(m.activeTrades, sessionID)
+	m.activeMu.Unlock()
+}
+
+func (m *Manager) requestCashout(req cashoutRequest) {
+	m.activeMu.Lock()
+	active := m.activeTrades[req.SessionID]
+	if active == nil {
+		m.pendingCashouts[req.SessionID] = req
+	}
+	m.activeMu.Unlock()
+	if active == nil {
+		log.Printf("[trace=%s] cashout queued until session is active: %s", req.TraceID, req.SessionID)
+		go m.expirePendingCashout(req)
+		return
+	}
+	select {
+	case active.cashoutCh <- req:
+		log.Printf("[trace=%s] cashout requested session=%s multiplier=%.2f",
+			req.TraceID, req.SessionID, req.Multiplier)
+	default:
+		log.Printf("[trace=%s] duplicate cashout ignored session=%s", req.TraceID, req.SessionID)
+	}
+}
+
+func (m *Manager) expirePendingCashout(req cashoutRequest) {
+	time.Sleep(2 * time.Minute)
+	m.activeMu.Lock()
+	defer m.activeMu.Unlock()
+	pending, ok := m.pendingCashouts[req.SessionID]
+	if ok && pending.TraceID == req.TraceID && pending.CreatedAt == req.CreatedAt {
+		delete(m.pendingCashouts, req.SessionID)
 	}
 }
 
