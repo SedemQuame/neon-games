@@ -5,16 +5,10 @@ import 'package:web/web.dart' as web;
 
 Future<bool> copyTextToClipboard(String value) async {
   try {
-    await web.window.navigator.clipboard.writeText(value).toDart;
-    return true;
-  } catch (_) {
-    // Continue to DOM fallback below.
-  }
-
-  try {
     final textArea =
         web.document.createElement('textarea') as web.HTMLTextAreaElement
           ..value = value;
+    textArea.setAttribute('readonly', 'readonly');
     textArea.style.position = 'fixed';
     textArea.style.left = '-9999px';
     textArea.style.top = '0';
@@ -27,6 +21,13 @@ Future<bool> copyTextToClipboard(String value) async {
     if (copied) {
       return true;
     }
+  } catch (_) {
+    // Continue to platform fallbacks below.
+  }
+
+  try {
+    await web.window.navigator.clipboard.writeText(value).toDart;
+    return true;
   } catch (_) {
     // Continue to Flutter fallback below.
   }

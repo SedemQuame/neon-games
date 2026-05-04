@@ -31,6 +31,11 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
       appBar: const GameActivityAppBar(title: 'Velocity Vector'),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: !_isExecuting,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: Stack(
         children: [
           // Background Grid
@@ -188,13 +193,7 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
                       enabled: !_isExecuting,
                       onChanged: (next) => setState(() => stakeAmount = next),
                     ),
-                    const SizedBox(height: 12),
-                    PlayModeToggle(
-                      value: _playMode,
-                      enabled: !_isExecuting,
-                      onChanged: (mode) => setState(() => _playMode = mode),
-                    ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(

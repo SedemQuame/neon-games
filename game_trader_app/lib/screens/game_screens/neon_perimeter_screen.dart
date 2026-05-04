@@ -213,6 +213,11 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
     return Scaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Neon Perimeter'),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: !_isPlaying,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -524,15 +529,6 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
                 onChanged: (next) => setState(() => _stakeUsd = next),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: PlayModeToggle(
-                value: _playMode,
-                enabled: !_isPlaying,
-                onChanged: (mode) => setState(() => _playMode = mode),
-              ),
-            ),
-            const SizedBox(height: 12),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(

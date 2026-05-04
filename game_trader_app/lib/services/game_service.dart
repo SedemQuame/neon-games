@@ -20,6 +20,7 @@ class GameService {
   String? _currentToken;
 
   Stream<GameEvent> get events => _events.stream;
+  bool get isConnected => _channel != null;
 
   Future<void> connect(String token) async {
     if (token.isEmpty) return;
@@ -30,11 +31,13 @@ class GameService {
     final uri = Uri.parse('${_client.websocketBase}/ws?token=$token');
     debugPrint('[GameService] connecting to $uri');
     AppLogger.instance.log('ws', 'Connecting to $uri');
-    _channel = WebSocketChannel.connect(uri);
+    final channel = WebSocketChannel.connect(uri);
+    _channel = channel;
     _currentToken = token;
-    _subscription = _channel!.stream.listen(
+    _subscription = channel.stream.listen(
       _handleMessage,
       onError: (error, stackTrace) {
+        if (_channel != channel) return;
         debugPrint('[GameService] socket error: $error');
         AppLogger.instance.log(
           'ws',
@@ -45,24 +48,40 @@ class GameService {
         _failPending(error);
       },
       onDone: () {
+        if (_channel != channel) return;
         debugPrint('[GameService] socket closed');
         AppLogger.instance.log('ws', 'Socket closed', level: LogLevel.warning);
         _events.add(const GameErrorEvent('Connection closed'));
         _failPending(const GameSocketException('Connection closed'));
-        disconnect();
+        unawaited(disconnect());
       },
     );
+    try {
+      await channel.ready.timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          throw const GameSocketException('Game server connection timed out');
+        },
+      );
+    } catch (_) {
+      if (_channel == channel) {
+        await disconnect();
+      }
+      rethrow;
+    }
     _startPing();
   }
 
   Future<void> disconnect() async {
     _pingTimer?.cancel();
     _pingTimer = null;
-    await _subscription?.cancel();
+    final subscription = _subscription;
+    final channel = _channel;
     _subscription = null;
-    await _channel?.sink.close();
     _channel = null;
     _currentToken = null;
+    await subscription?.cancel();
+    await channel?.sink.close();
   }
 
   Future<GameBetAccepted> placeBet({
@@ -159,8 +178,15 @@ class GameService {
     safeSend({'type': 'SET_ROOM_READY', 'ready': ready});
   }
 
-  void startRoomRound() {
-    safeSend({'type': 'START_ROOM_ROUND'});
+  void updateRoomStake(double stakeUsd) {
+    safeSend({'type': 'UPDATE_ROOM_STAKE', 'stakeUsd': stakeUsd});
+  }
+
+  void startRoomRound({double? stakeUsd}) {
+    safeSend({
+      'type': 'START_ROOM_ROUND',
+      if (stakeUsd != null && stakeUsd > 0) 'stakeUsd': stakeUsd,
+    });
   }
 
   void submitRoomAction(Map<String, dynamic> action) {
@@ -169,6 +195,10 @@ class GameService {
 
   void inviteToRoom(String targetUserId) {
     safeSend({'type': 'INVITE_TO_ROOM', 'targetUserId': targetUserId});
+  }
+
+  void listAvailablePlayers() {
+    safeSend(const {'type': 'LIST_AVAILABLE_PLAYERS'});
   }
 
   void kickRoomPlayer(String targetUserId) {
@@ -185,7 +215,18 @@ class GameService {
   void safeSend(Map<String, dynamic> data) {
     final channel = _channel;
     if (channel == null) return;
-    channel.sink.add(jsonEncode(data));
+    try {
+      channel.sink.add(jsonEncode(data));
+    } catch (error) {
+      AppLogger.instance.log(
+        'ws',
+        'Send failed: $error',
+        level: LogLevel.warning,
+      );
+      _events.add(const GameErrorEvent('Connection closed'));
+      unawaited(disconnect());
+      return;
+    }
     AppLogger.instance.log(
       'ws',
       'Outbound: ${data['type'] ?? 'UNKNOWN'}',
@@ -338,6 +379,19 @@ class GameService {
           break;
         case 'ROOM_INVITE_SENT':
           event = const RoomInfoEvent('INVITE_SENT');
+          emitEvent = true;
+          break;
+        case 'AVAILABLE_PLAYERS':
+          final payload =
+              decoded['payload'] as Map<String, dynamic>? ?? const {};
+          final players = (payload['players'] as List? ?? const [])
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    AvailableRoomPlayer.fromJson(item.cast<String, dynamic>()),
+              )
+              .toList();
+          event = AvailablePlayersEvent(players);
           emitEvent = true;
           break;
         case 'ROOM_PLAYER_KICKED':
@@ -629,6 +683,8 @@ class RoomRoundStartedPayload {
     required this.distributableUsd,
     required this.choices,
     this.startedAt,
+    this.actionDeadline,
+    this.rollDeadline,
   });
 
   final String roomCode;
@@ -644,6 +700,8 @@ class RoomRoundStartedPayload {
   final double distributableUsd;
   final List<RoomPlayerChoice> choices;
   final DateTime? startedAt;
+  final DateTime? actionDeadline;
+  final DateTime? rollDeadline;
 
   factory RoomRoundStartedPayload.fromJson(Map<String, dynamic> json) {
     return RoomRoundStartedPayload(
@@ -666,6 +724,12 @@ class RoomRoundStartedPayload {
           .toList(),
       startedAt: json['startedAt'] != null
           ? DateTime.tryParse(json['startedAt'].toString())
+          : null,
+      actionDeadline: json['actionDeadline'] != null
+          ? DateTime.tryParse(json['actionDeadline'].toString())
+          : null,
+      rollDeadline: json['rollDeadline'] != null
+          ? DateTime.tryParse(json['rollDeadline'].toString())
           : null,
     );
   }
@@ -819,6 +883,26 @@ class RoomInviteEvent extends GameEvent {
   final RoomSummary room;
   final String fromUserId;
   final String fromUserName;
+}
+
+class AvailableRoomPlayer {
+  const AvailableRoomPlayer({required this.userId, required this.displayName});
+
+  final String userId;
+  final String displayName;
+
+  factory AvailableRoomPlayer.fromJson(Map<String, dynamic> json) {
+    return AvailableRoomPlayer(
+      userId: json['userId']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
+    );
+  }
+}
+
+class AvailablePlayersEvent extends GameEvent {
+  const AvailablePlayersEvent(this.players) : super('AVAILABLE_PLAYERS');
+
+  final List<AvailableRoomPlayer> players;
 }
 
 class RoomRoundStartedEvent extends GameEvent {

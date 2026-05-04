@@ -48,6 +48,11 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
     return Scaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Kinetic Survivor'),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: !_isSimulating,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: Stack(
         children: [
           SafeArea(
@@ -193,12 +198,6 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
                         value: stakeAmount,
                         enabled: !_isSimulating,
                         onChanged: (next) => setState(() => stakeAmount = next),
-                      ),
-                      const SizedBox(height: 12),
-                      PlayModeToggle(
-                        value: _playMode,
-                        enabled: !_isSimulating,
-                        onChanged: (mode) => setState(() => _playMode = mode),
                       ),
                       const SizedBox(height: 16),
                       Row(

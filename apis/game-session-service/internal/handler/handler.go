@@ -189,7 +189,9 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": "bad create-room payload"})
 				continue
 			}
-			snapshot, err := h.mgr.CreateRoom(userID, req)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			snapshot, err := h.mgr.CreateRoom(ctx, userID, req)
+			cancel()
 			if err != nil {
 				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
 				continue
@@ -210,7 +212,9 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": "bad join payload"})
 				continue
 			}
-			snapshot, err := h.mgr.JoinRoom(userID, req)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			snapshot, err := h.mgr.JoinRoom(ctx, userID, req)
+			cancel()
 			if err != nil {
 				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
 				continue
@@ -239,9 +243,25 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 				continue
 			}
 			conn.WriteJSON(fiber.Map{"type": "ROOM_STATE", "payload": snapshot})
+		case "UPDATE_ROOM_STAKE":
+			var req session.UpdateRoomStakeRequest
+			if err := json.Unmarshal(data, &req); err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": "bad stake payload"})
+				continue
+			}
+			snapshot, err := h.mgr.UpdateRoomStake(userID, req)
+			if err != nil {
+				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
+				continue
+			}
+			conn.WriteJSON(fiber.Map{"type": "ROOM_STATE", "payload": snapshot})
 		case "START_ROOM_ROUND":
+			var req struct {
+				StakeUsd float64 `json:"stakeUsd"`
+			}
+			_ = json.Unmarshal(data, &req)
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			payload, err := h.mgr.StartRoomRound(ctx, userID)
+			payload, err := h.mgr.StartRoomRound(ctx, userID, req.StakeUsd)
 			cancel()
 			if err != nil {
 				conn.WriteJSON(fiber.Map{"type": "ROOM_ERROR", "message": err.Error()})
@@ -273,6 +293,16 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 				continue
 			}
 			conn.WriteJSON(fiber.Map{"type": "ROOM_INVITE_SENT"})
+		case "LIST_AVAILABLE_PLAYERS":
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			players := h.mgr.ListAvailableRoomPlayers(ctx, userID)
+			cancel()
+			conn.WriteJSON(fiber.Map{
+				"type": "AVAILABLE_PLAYERS",
+				"payload": fiber.Map{
+					"players": players,
+				},
+			})
 		case "KICK_ROOM_PLAYER":
 			var req session.KickRoomPlayerRequest
 			if err := json.Unmarshal(data, &req); err != nil {

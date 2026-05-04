@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"math"
 	"math/rand"
 	"sort"
@@ -23,11 +24,14 @@ const (
 
 	roomStateWaiting = "WAITING"
 	roomStateInRound = "IN_ROUND"
+
+	dicePickWindow = 15 * time.Second
+	diceRollWindow = 10 * time.Second
+	coinFlipWindow = 10 * time.Second
 )
 
 var (
 	errRoomNotFound         = errors.New("room not found")
-	errAlreadyInRoom        = errors.New("user already in a room")
 	errRoomFull             = errors.New("room is full")
 	errRoundAlreadyActive   = errors.New("round already active")
 	errRoundNotActive       = errors.New("no active round")
@@ -42,6 +46,16 @@ var (
 	errInvalidRoomAction    = errors.New("invalid action for this game")
 	errPlayerNotInRound     = errors.New("player is not part of this round")
 	errAlreadySubmittedMove = errors.New("action already submitted for this round")
+)
+
+var (
+	guestNameAdjectives = []string{
+		"Arcade", "Blaze", "Cosmic", "Flash", "Grid", "Lucky", "Neon", "Nova",
+		"Pixel", "Prime", "Rapid", "Rocket", "Turbo", "Vector", "Victory", "Volt",
+	}
+	guestNameNouns = []string{
+		"Ace", "Pilot", "Player", "Rider", "Runner", "Spinner", "Trader", "Winner",
+	}
 )
 
 var allowedRoomGames = map[string]struct{}{
@@ -77,12 +91,21 @@ type SetRoomReadyRequest struct {
 	Ready bool `json:"ready"`
 }
 
+type UpdateRoomStakeRequest struct {
+	StakeUsd float64 `json:"stakeUsd"`
+}
+
 type SubmitRoomActionRequest struct {
 	Action map[string]interface{} `json:"action"`
 }
 
 type InviteToRoomRequest struct {
 	TargetUserID string `json:"targetUserId"`
+}
+
+type AvailableRoomPlayer struct {
+	UserID      string `json:"userId"`
+	DisplayName string `json:"displayName"`
 }
 
 type KickRoomPlayerRequest struct {
@@ -137,6 +160,8 @@ type RoomRoundStartedPayload struct {
 	DistributableUsd float64            `json:"distributableUsd"`
 	Choices          []RoomPlayerChoice `json:"choices"`
 	StartedAt        time.Time          `json:"startedAt"`
+	ActionDeadline   *time.Time         `json:"actionDeadline,omitempty"`
+	RollDeadline     *time.Time         `json:"rollDeadline,omitempty"`
 }
 
 type RoomPlayerChoice struct {
@@ -205,8 +230,12 @@ type roomRound struct {
 	StartedAt    time.Time
 	TargetNumber int
 
-	Participants map[string]*roundParticipant
-	Actions      map[string]map[string]interface{}
+	Participants        map[string]*roundParticipant
+	SettledParticipants map[string]*roundParticipant
+	Actions             map[string]map[string]interface{}
+	ActionDeadline      time.Time
+	RollDeadline        time.Time
+	TieBreakerRound     int
 }
 
 type roundParticipant struct {
@@ -216,7 +245,7 @@ type roundParticipant struct {
 	StakeUsd    float64
 }
 
-func (m *Manager) CreateRoom(userID string, req CreateRoomRequest) (*RoomStateSnapshot, error) {
+func (m *Manager) CreateRoom(ctx context.Context, userID string, req CreateRoomRequest) (*RoomStateSnapshot, error) {
 	gameKey := strings.ToUpper(strings.TrimSpace(req.GameKey))
 	if _, ok := allowedRoomGames[gameKey]; !ok {
 		return nil, errInvalidRoomGame
@@ -248,16 +277,38 @@ func (m *Manager) CreateRoom(userID string, req CreateRoomRequest) (*RoomStateSn
 	}
 	stake = roundMoney(stake)
 
-	now := time.Now().UTC()
-	code := m.nextRoomCode()
+	displayName := m.displayNameForUser(ctx, userID)
 
 	m.roomsMu.Lock()
-	defer m.roomsMu.Unlock()
-
-	if _, already := m.userRooms[userID]; already {
-		return nil, errAlreadyInRoom
+	now := time.Now().UTC()
+	var previousSnapshot *RoomStateSnapshot
+	var previousMemberIDs []string
+	if previousCode, already := m.userRooms[userID]; already {
+		if previousRoom, exists := m.rooms[previousCode]; exists {
+			if previousRoom.State == roomStateInRound {
+				m.roomsMu.Unlock()
+				return nil, errCannotLeaveInRound
+			}
+			delete(previousRoom.Players, userID)
+			delete(m.userRooms, userID)
+			previousRoom.PlayerOrder = withoutUser(previousRoom.PlayerOrder, userID)
+			previousRoom.UpdatedAt = now
+			if len(previousRoom.Players) == 0 {
+				delete(m.rooms, previousCode)
+			} else {
+				if previousRoom.HostUserID == userID && len(previousRoom.PlayerOrder) > 0 {
+					previousRoom.HostUserID = previousRoom.PlayerOrder[0]
+				}
+				snapshot := previousRoom.snapshot()
+				previousSnapshot = &snapshot
+				previousMemberIDs = previousRoom.memberIDs()
+			}
+		} else {
+			delete(m.userRooms, userID)
+		}
 	}
 
+	code := m.nextRoomCode()
 	room := &multiplayerRoom{
 		Code:       code,
 		GameKey:    gameKey,
@@ -270,8 +321,8 @@ func (m *Manager) CreateRoom(userID string, req CreateRoomRequest) (*RoomStateSn
 		Players: map[string]*roomPlayer{
 			userID: {
 				UserID:      userID,
-				DisplayName: displayNameForUser(userID),
-				Ready:       true,
+				DisplayName: displayName,
+				Ready:       false,
 				JoinedAt:    now,
 			},
 		},
@@ -283,6 +334,11 @@ func (m *Manager) CreateRoom(userID string, req CreateRoomRequest) (*RoomStateSn
 	m.userRooms[userID] = code
 
 	snapshot := room.snapshot()
+	m.roomsMu.Unlock()
+
+	if previousSnapshot != nil && len(previousMemberIDs) > 0 {
+		m.broadcastRoomState(previousMemberIDs, *previousSnapshot)
+	}
 	return &snapshot, nil
 }
 
@@ -307,7 +363,7 @@ func (m *Manager) ListPublicRooms(req ListPublicRoomsRequest) []RoomSummary {
 			continue
 		}
 
-		hostName := displayNameForUser(room.HostUserID)
+		hostName := fallbackDisplayNameForUser(room.HostUserID)
 		if host, ok := room.Players[room.HostUserID]; ok {
 			hostName = host.DisplayName
 		}
@@ -327,11 +383,12 @@ func (m *Manager) ListPublicRooms(req ListPublicRoomsRequest) []RoomSummary {
 	return items
 }
 
-func (m *Manager) JoinRoom(userID string, req JoinRoomRequest) (*RoomStateSnapshot, error) {
+func (m *Manager) JoinRoom(ctx context.Context, userID string, req JoinRoomRequest) (*RoomStateSnapshot, error) {
 	roomCode := strings.ToUpper(strings.TrimSpace(req.RoomCode))
 	if roomCode == "" {
 		return nil, errRoomNotFound
 	}
+	displayName := m.displayNameForUser(ctx, userID)
 
 	m.roomsMu.Lock()
 	room, ok := m.rooms[roomCode]
@@ -345,8 +402,6 @@ func (m *Manager) JoinRoom(userID string, req JoinRoomRequest) (*RoomStateSnapsh
 			m.roomsMu.Unlock()
 			return &snapshot, nil
 		}
-		m.roomsMu.Unlock()
-		return nil, errAlreadyInRoom
 	}
 	if len(room.Players) >= room.MaxPlayers {
 		m.roomsMu.Unlock()
@@ -358,9 +413,33 @@ func (m *Manager) JoinRoom(userID string, req JoinRoomRequest) (*RoomStateSnapsh
 	}
 
 	now := time.Now().UTC()
+	var previousSnapshot *RoomStateSnapshot
+	var previousMemberIDs []string
+	if previousCode, inRoom := m.userRooms[userID]; inRoom && previousCode != roomCode {
+		if previousRoom, exists := m.rooms[previousCode]; exists {
+			if previousRoom.State == roomStateInRound {
+				m.roomsMu.Unlock()
+				return nil, errCannotLeaveInRound
+			}
+			delete(previousRoom.Players, userID)
+			previousRoom.PlayerOrder = withoutUser(previousRoom.PlayerOrder, userID)
+			previousRoom.UpdatedAt = now
+			if len(previousRoom.Players) == 0 {
+				delete(m.rooms, previousCode)
+			} else {
+				if previousRoom.HostUserID == userID && len(previousRoom.PlayerOrder) > 0 {
+					previousRoom.HostUserID = previousRoom.PlayerOrder[0]
+				}
+				snapshot := previousRoom.snapshot()
+				previousSnapshot = &snapshot
+				previousMemberIDs = previousRoom.memberIDs()
+			}
+		}
+		delete(m.userRooms, userID)
+	}
 	room.Players[userID] = &roomPlayer{
 		UserID:      userID,
-		DisplayName: displayNameForUser(userID),
+		DisplayName: displayName,
 		Ready:       false,
 		JoinedAt:    now,
 	}
@@ -371,6 +450,9 @@ func (m *Manager) JoinRoom(userID string, req JoinRoomRequest) (*RoomStateSnapsh
 	memberIDs := room.memberIDs()
 	m.roomsMu.Unlock()
 
+	if previousSnapshot != nil && len(previousMemberIDs) > 0 {
+		m.broadcastRoomState(previousMemberIDs, *previousSnapshot)
+	}
 	m.broadcastRoomState(memberIDs, snapshot)
 	return &snapshot, nil
 }
@@ -446,6 +528,45 @@ func (m *Manager) SetRoomReady(userID string, req SetRoomReadyRequest) (*RoomSta
 	return &snapshot, nil
 }
 
+func (m *Manager) UpdateRoomStake(userID string, req UpdateRoomStakeRequest) (*RoomStateSnapshot, error) {
+	stake := roundMoney(req.StakeUsd)
+	if stake <= 0 {
+		return nil, ErrInvalidStake
+	}
+
+	m.roomsMu.Lock()
+	roomCode, ok := m.userRooms[userID]
+	if !ok {
+		m.roomsMu.Unlock()
+		return nil, errNotRoomMember
+	}
+	room, ok := m.rooms[roomCode]
+	if !ok {
+		m.roomsMu.Unlock()
+		return nil, errRoomNotFound
+	}
+	if room.HostUserID != userID {
+		m.roomsMu.Unlock()
+		return nil, errNotRoomHost
+	}
+	if room.State == roomStateInRound || room.Round != nil {
+		m.roomsMu.Unlock()
+		return nil, errRoundAlreadyActive
+	}
+
+	room.StakeUsd = stake
+	room.UpdatedAt = time.Now().UTC()
+	for _, player := range room.Players {
+		player.Ready = false
+	}
+	snapshot := room.snapshot()
+	memberIDs := room.memberIDs()
+	m.roomsMu.Unlock()
+
+	m.broadcastRoomState(memberIDs, snapshot)
+	return &snapshot, nil
+}
+
 func (m *Manager) GetUserRoomSnapshot(userID string) (*RoomStateSnapshot, bool) {
 	m.roomsMu.RLock()
 	defer m.roomsMu.RUnlock()
@@ -482,7 +603,7 @@ func (m *Manager) InviteToRoom(userID string, req InviteToRoomRequest) error {
 		RoomCode:        room.Code,
 		GameKey:         room.GameKey,
 		HostUserID:      room.HostUserID,
-		HostDisplayName: displayNameForUser(room.HostUserID),
+		HostDisplayName: fallbackDisplayNameForUser(room.HostUserID),
 		PlayerCount:     len(room.Players),
 		MinPlayers:      room.MinPlayers,
 		MaxPlayers:      room.MaxPlayers,
@@ -493,7 +614,7 @@ func (m *Manager) InviteToRoom(userID string, req InviteToRoomRequest) error {
 	if host, exists := room.Players[room.HostUserID]; exists {
 		summary.HostDisplayName = host.DisplayName
 	}
-	inviterName := displayNameForUser(userID)
+	inviterName := fallbackDisplayNameForUser(userID)
 	if inviter, exists := room.Players[userID]; exists {
 		inviterName = inviter.DisplayName
 	}
@@ -508,6 +629,43 @@ func (m *Manager) InviteToRoom(userID string, req InviteToRoomRequest) error {
 		},
 	})
 	return nil
+}
+
+func (m *Manager) ListAvailableRoomPlayers(ctx context.Context, userID string) []AvailableRoomPlayer {
+	m.mu.RLock()
+	userIDs := make([]string, 0, len(m.subscribers))
+	for uid, subs := range m.subscribers {
+		if uid == userID || len(subs) == 0 {
+			continue
+		}
+		userIDs = append(userIDs, uid)
+	}
+	m.mu.RUnlock()
+
+	m.roomsMu.RLock()
+	occupiedRooms := make(map[string]string, len(m.userRooms))
+	for uid, roomCode := range m.userRooms {
+		occupiedRooms[uid] = roomCode
+	}
+	m.roomsMu.RUnlock()
+
+	sort.Strings(userIDs)
+	players := make([]AvailableRoomPlayer, 0, len(userIDs))
+	for _, uid := range userIDs {
+		roomCode := occupiedRooms[uid]
+		if roomCode != "" {
+			// Do not invite users already seated in this or another room.
+			continue
+		}
+		players = append(players, AvailableRoomPlayer{
+			UserID:      uid,
+			DisplayName: m.displayNameForUser(ctx, uid),
+		})
+		if len(players) >= 20 {
+			break
+		}
+	}
+	return players
 }
 
 func (m *Manager) KickRoomPlayer(userID string, req KickRoomPlayerRequest) (*RoomStateSnapshot, error) {
@@ -566,7 +724,7 @@ func (m *Manager) KickRoomPlayer(userID string, req KickRoomPlayerRequest) (*Roo
 	return &snapshot, nil
 }
 
-func (m *Manager) StartRoomRound(ctx context.Context, userID string) (*RoomRoundStartedPayload, error) {
+func (m *Manager) StartRoomRound(ctx context.Context, userID string, nextStakeUsd float64) (*RoomRoundStartedPayload, error) {
 	m.roomsMu.Lock()
 	roomCode, ok := m.userRooms[userID]
 	if !ok {
@@ -585,6 +743,12 @@ func (m *Manager) StartRoomRound(ctx context.Context, userID string) (*RoomRound
 	if room.State == roomStateInRound || room.Round != nil {
 		m.roomsMu.Unlock()
 		return nil, errRoundAlreadyActive
+	}
+	if nextStakeUsd > 0 {
+		room.StakeUsd = roundMoney(nextStakeUsd)
+	}
+	if host := room.Players[userID]; host != nil {
+		host.Ready = true
 	}
 
 	readyPlayers := make([]*roomPlayer, 0, len(room.Players))
@@ -612,14 +776,21 @@ func (m *Manager) StartRoomRound(ctx context.Context, userID string) (*RoomRound
 	}
 
 	roundID := uuid.NewString()
+	actionDeadline := time.Time{}
+	if room.GameKey == "DICE_DUEL" {
+		actionDeadline = time.Now().UTC().Add(dicePickWindow)
+	}
 	room.Round = &roomRound{
-		ID:           roundID,
-		GameKey:      room.GameKey,
-		Status:       "COLLECTING_ACTIONS",
-		StartedAt:    time.Now().UTC(),
-		TargetNumber: rand.Intn(100),
-		Participants: participants,
-		Actions:      make(map[string]map[string]interface{}),
+		ID:                  roundID,
+		GameKey:             room.GameKey,
+		Status:              "COLLECTING_ACTIONS",
+		StartedAt:           time.Now().UTC(),
+		TargetNumber:        rand.Intn(100),
+		Participants:        participants,
+		SettledParticipants: cloneRoundParticipants(participants),
+		Actions:             make(map[string]map[string]interface{}),
+		ActionDeadline:      actionDeadline,
+		TieBreakerRound:     1,
 	}
 	if !requiresAction(room.GameKey) {
 		room.Round.Status = "RESOLVING"
@@ -732,6 +903,9 @@ func (m *Manager) StartRoomRound(ctx context.Context, userID string) (*RoomRound
 		Choices:          roomRoundChoices(gameKey, participants, map[string]map[string]interface{}{}),
 		StartedAt:        time.Now().UTC(),
 	}
+	if !actionDeadline.IsZero() {
+		payload.ActionDeadline = &actionDeadline
+	}
 
 	m.broadcastRoomRoundStarted(memberIDs, *payload)
 
@@ -739,6 +913,9 @@ func (m *Manager) StartRoomRound(ctx context.Context, userID string) (*RoomRound
 		resolveCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		_, _ = m.ResolveRoomRound(resolveCtx, roomCode, roundID)
+	}
+	if gameKey == "DICE_DUEL" {
+		m.scheduleDicePickDeadline(roomCode, roundID, actionDeadline)
 	}
 
 	_ = stake // explicit: stake is included in snapshot events and used during reserves.
@@ -809,14 +986,24 @@ func (m *Manager) SubmitRoomAction(ctx context.Context, userID string, req Submi
 		Choices:          roomRoundChoices(round.GameKey, round.Participants, round.Actions),
 		StartedAt:        round.StartedAt,
 	}
+	if !round.ActionDeadline.IsZero() {
+		deadline := round.ActionDeadline
+		payload.ActionDeadline = &deadline
+	}
 	memberIDs := room.memberIDs()
 	shouldResolve := actionCount >= playerCount
+	shouldStartDiceRoll := round.GameKey == "DICE_DUEL" && shouldResolve
+	shouldStartCoinFlip := round.GameKey == "COIN_TOSS" && shouldResolve
 	roundID := round.ID
 	m.roomsMu.Unlock()
 
 	m.broadcastRoomRoundStarted(memberIDs, *payload)
 
-	if shouldResolve {
+	if shouldStartDiceRoll {
+		m.startDiceRoll(roomCode, roundID)
+	} else if shouldStartCoinFlip {
+		m.startCoinFlip(roomCode, roundID)
+	} else if shouldResolve {
 		resolveCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 		_, _ = m.ResolveRoomRound(resolveCtx, roomCode, roundID)
@@ -840,12 +1027,32 @@ func (m *Manager) ResolveRoomRound(ctx context.Context, roomCode, roundID string
 		m.roomsMu.Unlock()
 		return nil, errRoundNotActive
 	}
+	if round.Status == "RESOLVING" && requiresAction(round.GameKey) {
+		m.roomsMu.Unlock()
+		return nil, errRoundNotActive
+	}
+	if round.GameKey == "DICE_DUEL" || round.GameKey == "COIN_TOSS" {
+		if round.Status != "ROLLING" ||
+			round.RollDeadline.IsZero() ||
+			time.Now().UTC().Before(round.RollDeadline) {
+			m.roomsMu.Unlock()
+			return nil, errRoundNotActive
+		}
+	}
 	round.Status = "RESOLVING"
 
 	participants := make([]*roundParticipant, 0, len(round.Participants))
 	for _, p := range round.Participants {
 		cp := *p
 		participants = append(participants, &cp)
+	}
+	settledParticipants := make([]*roundParticipant, 0, len(round.SettledParticipants))
+	for _, p := range round.SettledParticipants {
+		cp := *p
+		settledParticipants = append(settledParticipants, &cp)
+	}
+	if len(settledParticipants) == 0 {
+		settledParticipants = participants
 	}
 	actions := make(map[string]map[string]interface{}, len(round.Actions))
 	for uid, action := range round.Actions {
@@ -857,11 +1064,86 @@ func (m *Manager) ResolveRoomRound(ctx context.Context, roomCode, roundID string
 	}
 	gameKey := round.GameKey
 	target := round.TargetNumber
+	tieBreakerRound := round.TieBreakerRound
 	memberIDs := room.memberIDs()
 	m.roomsMu.Unlock()
 
-	winnerIDs, summary, detail := evaluateRound(gameKey, participants, actions, target)
+	var winnerIDs []string
+	var summary string
+	var detail map[string]interface{}
+	if gameKey == "DICE_DUEL" {
+		winnerIDs, summary, detail = evaluateDice(participants, actions)
+		detail["tieBreakerRound"] = tieBreakerRound
+		choices := roomResultChoices(gameKey, participants, actions, detail)
+		if len(winnerIDs) != 1 {
+			detail["continues"] = true
+			nextParticipants := participantsByUserID(participants, winnerIDs)
+			if len(nextParticipants) == 0 {
+				nextParticipants = participantsByUserID(participants, participantIDs(participants))
+			}
+			nextDeadline := time.Now().UTC().Add(dicePickWindow)
+			nextPayload := RoomRoundStartedPayload{
+				RoomCode:         roomCode,
+				RoundID:          roundID,
+				GameKey:          gameKey,
+				RequiresAction:   true,
+				ActionHint:       actionHint(gameKey),
+				ActionCount:      0,
+				PlayerCount:      len(nextParticipants),
+				StakeUsd:         stakeFromParticipants(settledParticipants),
+				PotUsd:           roundMoney(totalStake(settledParticipants)),
+				CommissionUsd:    roundMoney(totalStake(settledParticipants) * 0.15),
+				DistributableUsd: roundMoney(totalStake(settledParticipants) * 0.85),
+				Choices:          roomRoundChoices(gameKey, nextParticipants, map[string]map[string]interface{}{}),
+				StartedAt:        time.Now().UTC(),
+				ActionDeadline:   &nextDeadline,
+			}
+			result := RoomRoundResultPayload{
+				RoomCode:           roomCode,
+				RoundID:            roundID,
+				GameKey:            gameKey,
+				StakeUsd:           nextPayload.StakeUsd,
+				PotUsd:             nextPayload.PotUsd,
+				CommissionUsd:      nextPayload.CommissionUsd,
+				DistributableUsd:   nextPayload.DistributableUsd,
+				PayoutPerWinnerUsd: 0,
+				WinnerUserIDs:      []string{},
+				Winners:            []RoomWinnerPayout{},
+				Summary:            summary,
+				Detail:             detail,
+				Choices:            choices,
+				CompletedAt:        time.Now().UTC(),
+				ParticipantCount:   len(settledParticipants),
+				PlatformCutPercent: 15,
+			}
+
+			m.roomsMu.Lock()
+			if roomRef, exists := m.rooms[roomCode]; exists && roomRef.Round != nil && roomRef.Round.ID == roundID {
+				roomRef.Round.Participants = nextParticipants
+				roomRef.Round.Actions = make(map[string]map[string]interface{})
+				roomRef.Round.Status = "COLLECTING_ACTIONS"
+				roomRef.Round.ActionDeadline = nextDeadline
+				roomRef.Round.RollDeadline = time.Time{}
+				roomRef.Round.TieBreakerRound++
+				roomRef.UpdatedAt = time.Now().UTC()
+				memberIDs = roomRef.memberIDs()
+				m.roomsMu.Unlock()
+				m.broadcastRoomRoundResult(memberIDs, result)
+				m.broadcastRoomRoundStarted(memberIDs, nextPayload)
+				m.scheduleDicePickDeadline(roomCode, roundID, nextDeadline)
+				return &result, nil
+			}
+			m.roomsMu.Unlock()
+			return &result, nil
+		}
+	} else {
+		winnerIDs, summary, detail = evaluateRound(gameKey, participants, actions, target)
+	}
+
 	choices := roomResultChoices(gameKey, participants, actions, detail)
+	if gameKey == "DICE_DUEL" {
+		choices = diceResultChoices(settledParticipants, participants, actions, detail)
+	}
 	allowNoWinners := false
 	if raw, ok := detail["noWinners"].(bool); ok && raw {
 		allowNoWinners = true
@@ -877,10 +1159,7 @@ func (m *Manager) ResolveRoomRound(ctx context.Context, roomCode, roundID string
 		winnerSet[uid] = struct{}{}
 	}
 
-	pot := 0.0
-	for _, p := range participants {
-		pot += p.StakeUsd
-	}
+	pot := totalStake(settledParticipants)
 	pot = roundMoney(pot)
 	commission := roundMoney(pot * 0.15)
 	distributable := roundMoney(pot - commission)
@@ -890,7 +1169,7 @@ func (m *Manager) ResolveRoomRound(ctx context.Context, roomCode, roundID string
 	}
 
 	winners := make([]RoomWinnerPayout, 0, len(winnerIDs))
-	for _, p := range participants {
+	for _, p := range settledParticipants {
 		payout := 0.0
 		outcome := "LOSS"
 		if _, isWinner := winnerSet[p.UserID]; isWinner {
@@ -944,7 +1223,7 @@ func (m *Manager) ResolveRoomRound(ctx context.Context, roomCode, roundID string
 		RoomCode:           roomCode,
 		RoundID:            roundID,
 		GameKey:            gameKey,
-		StakeUsd:           roundMoney(pot / math.Max(float64(len(participants)), 1)),
+		StakeUsd:           roundMoney(pot / math.Max(float64(len(settledParticipants)), 1)),
 		PotUsd:             pot,
 		CommissionUsd:      commission,
 		DistributableUsd:   distributable,
@@ -1039,7 +1318,13 @@ func normalizeAction(gameKey string, raw map[string]interface{}) (map[string]int
 			return nil, errInvalidRoomAction
 		}
 		return map[string]interface{}{"box": n}, nil
-	case "DICE_DUEL", "HIGH_CARD":
+	case "DICE_DUEL":
+		n, ok := asInt(raw["number"])
+		if !ok || n < 1 || n > 6 {
+			return nil, errInvalidRoomAction
+		}
+		return map[string]interface{}{"number": n}, nil
+	case "HIGH_CARD":
 		return map[string]interface{}{}, nil
 	default:
 		return nil, errInvalidRoomGame
@@ -1100,12 +1385,53 @@ func roomResultChoices(
 	return choices
 }
 
+func diceResultChoices(
+	allParticipants []*roundParticipant,
+	activeParticipants []*roundParticipant,
+	actions map[string]map[string]interface{},
+	detail map[string]interface{},
+) []RoomPlayerChoice {
+	activeSet := make(map[string]struct{}, len(activeParticipants))
+	for _, participant := range activeParticipants {
+		if participant != nil {
+			activeSet[participant.UserID] = struct{}{}
+		}
+	}
+
+	choices := make([]RoomPlayerChoice, 0, len(allParticipants))
+	for _, participant := range allParticipants {
+		if participant == nil {
+			continue
+		}
+		label := "Eliminated"
+		submitted := true
+		if _, active := activeSet[participant.UserID]; active {
+			label = resultChoiceLabel("DICE_DUEL", participant.UserID, actions, detail)
+			if label == "Pick 0" {
+				label = "No pick"
+				submitted = false
+			}
+		}
+		choices = append(choices, RoomPlayerChoice{
+			UserID:      participant.UserID,
+			DisplayName: participant.DisplayName,
+			Submitted:   submitted,
+			Revealed:    true,
+			Choice:      label,
+		})
+	}
+	sort.Slice(choices, func(i, j int) bool {
+		return choices[i].DisplayName < choices[j].DisplayName
+	})
+	return choices
+}
+
 func resultChoiceLabel(gameKey, userID string, actions map[string]map[string]interface{}, detail map[string]interface{}) string {
 	switch gameKey {
 	case "RPS_CLASH":
 		return labelFromDetailMap(detail, "picks", userID, "ROCK")
 	case "DICE_DUEL":
-		return "Roll " + labelFromDetailMap(detail, "rolls", userID, "0")
+		return "Pick " + labelFromDetailMap(detail, "picks", userID, "0")
 	case "TARGET_STRIKE":
 		return "Number " + labelFromDetailMap(detail, "picks", userID, "0")
 	case "HIGH_CARD":
@@ -1168,6 +1494,8 @@ func actionChoiceLabel(gameKey string, action map[string]interface{}) string {
 	switch gameKey {
 	case "RPS_CLASH":
 		return strings.ToUpper(strings.TrimSpace(fmt.Sprintf("%v", action["pick"])))
+	case "DICE_DUEL":
+		return fmt.Sprintf("Pick %v", action["number"])
 	case "TARGET_STRIKE":
 		return fmt.Sprintf("Number %v", action["number"])
 	case "PARITY_CLASH":
@@ -1197,7 +1525,7 @@ func evaluateRound(
 	case "RPS_CLASH":
 		return evaluateRPS(participants, actions)
 	case "DICE_DUEL":
-		return evaluateDice(participants)
+		return evaluateDice(participants, actions)
 	case "TARGET_STRIKE":
 		return evaluateTargetStrike(participants, actions, target)
 	case "HIGH_CARD":
@@ -1278,24 +1606,44 @@ func evaluateRPS(
 	}
 }
 
-func evaluateDice(participants []*roundParticipant) ([]string, string, map[string]interface{}) {
-	rolls := make(map[string]int, len(participants))
-	maxRoll := 0
+func evaluateDice(
+	participants []*roundParticipant,
+	actions map[string]map[string]interface{},
+) ([]string, string, map[string]interface{}) {
+	roll := rand.Intn(6) + 1
+	picks := make(map[string]int, len(participants))
+	submitted := make(map[string]bool, len(participants))
+	survivors := make([]string, 0, len(participants))
+
 	for _, p := range participants {
-		roll := rand.Intn(6) + 1
-		rolls[p.UserID] = roll
-		if roll > maxRoll {
-			maxRoll = roll
+		pick := 0
+		if action, ok := actions[p.UserID]; ok {
+			if n, ok := asInt(action["number"]); ok && n >= 1 && n <= 6 {
+				pick = n
+				submitted[p.UserID] = true
+			}
+		}
+		picks[p.UserID] = pick
+		if pick == roll {
+			survivors = append(survivors, p.UserID)
 		}
 	}
-	winners := make([]string, 0, len(participants))
-	for _, p := range participants {
-		if rolls[p.UserID] == maxRoll {
-			winners = append(winners, p.UserID)
-		}
+
+	summary := fmt.Sprintf("Dice landed on %d", roll)
+	switch len(survivors) {
+	case 0:
+		summary = fmt.Sprintf("Dice landed on %d. No match, pick again", roll)
+	case 1:
+		summary = fmt.Sprintf("Dice landed on %d. Winner selected", roll)
+	default:
+		summary = fmt.Sprintf("Dice landed on %d. %d players continue", roll, len(survivors))
 	}
-	return winners, fmt.Sprintf("Highest dice roll: %d", maxRoll), map[string]interface{}{
-		"rolls": rolls,
+
+	return survivors, summary, map[string]interface{}{
+		"roll":      roll,
+		"picks":     picks,
+		"submitted": submitted,
+		"survivors": survivors,
 	}
 }
 
@@ -1655,7 +2003,7 @@ func evaluateLootBoxPool(
 
 func requiresAction(gameKey string) bool {
 	switch gameKey {
-	case "RPS_CLASH", "TARGET_STRIKE", "PARITY_CLASH", "COIN_TOSS", "TREASURE_BOX", "SECRET_BID", "SPIN_BOTTLE", "LOOT_BOX_POOL":
+	case "RPS_CLASH", "DICE_DUEL", "TARGET_STRIKE", "PARITY_CLASH", "COIN_TOSS", "TREASURE_BOX", "SECRET_BID", "SPIN_BOTTLE", "LOOT_BOX_POOL":
 		return true
 	default:
 		return false
@@ -1666,6 +2014,8 @@ func actionHint(gameKey string) string {
 	switch gameKey {
 	case "RPS_CLASH":
 		return "Submit pick: ROCK, PAPER, or SCISSORS."
+	case "DICE_DUEL":
+		return "Predict the dice face. It rolls for 10 seconds after picks lock."
 	case "TARGET_STRIKE":
 		return "Submit a number between 0 and 99."
 	case "PARITY_CLASH":
@@ -1680,8 +2030,6 @@ func actionHint(gameKey string) string {
 		return "Choose LEFT or RIGHT before the bottle stops."
 	case "LOOT_BOX_POOL":
 		return "Choose one loot box from 1 to 20. Exact hits win first."
-	case "DICE_DUEL":
-		return "No input required. Rolling now."
 	case "HIGH_CARD":
 		return "No input required. Drawing now."
 	default:
@@ -1708,19 +2056,279 @@ func asInt(v interface{}) (int, bool) {
 	return 0, false
 }
 
-func displayNameForUser(userID string) string {
+func (m *Manager) displayNameForUser(ctx context.Context, userID string) string {
+	if m != nil && m.db != nil {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		filter := bson.M{"_id": strings.TrimSpace(userID)}
+		if oid, err := primitive.ObjectIDFromHex(strings.TrimSpace(userID)); err == nil {
+			filter = bson.M{"_id": oid}
+		}
+
+		var user bson.M
+		if err := m.db.Collection("users").FindOne(ctx, filter).Decode(&user); err == nil {
+			if displayName := displayNameFromUser(user); displayName != "" {
+				return displayName
+			}
+		}
+	}
+	return fallbackDisplayNameForUser(userID)
+}
+
+func displayNameFromUser(user bson.M) string {
+	for _, key := range []string{"fullName", "username"} {
+		value, _ := user[key].(string)
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func fallbackDisplayNameForUser(userID string) string {
 	uid := strings.TrimSpace(userID)
-	if len(uid) > 6 {
-		uid = uid[len(uid)-6:]
-	}
 	if uid == "" {
-		uid = "Guest"
+		uid = "guest"
 	}
-	return "P-" + strings.ToUpper(uid)
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(uid))
+	value := hash.Sum32()
+	adjective := guestNameAdjectives[int(value)%len(guestNameAdjectives)]
+	noun := guestNameNouns[int(value/uint32(len(guestNameAdjectives)))%len(guestNameNouns)]
+	number := 1000 + int(value%9000)
+	return fmt.Sprintf("%s%s%d", adjective, noun, number)
 }
 
 func roundMoney(v float64) float64 {
 	return math.Round(v*100) / 100
+}
+
+func cloneRoundParticipants(src map[string]*roundParticipant) map[string]*roundParticipant {
+	out := make(map[string]*roundParticipant, len(src))
+	for userID, participant := range src {
+		if participant == nil {
+			continue
+		}
+		cp := *participant
+		out[userID] = &cp
+	}
+	return out
+}
+
+func participantIDs(participants []*roundParticipant) []string {
+	ids := make([]string, 0, len(participants))
+	for _, participant := range participants {
+		if participant != nil {
+			ids = append(ids, participant.UserID)
+		}
+	}
+	return ids
+}
+
+func participantsByUserID(participants []*roundParticipant, userIDs []string) map[string]*roundParticipant {
+	index := make(map[string]*roundParticipant, len(participants))
+	for _, participant := range participants {
+		if participant == nil {
+			continue
+		}
+		cp := *participant
+		index[participant.UserID] = &cp
+	}
+	out := make(map[string]*roundParticipant, len(userIDs))
+	for _, userID := range userIDs {
+		if participant, ok := index[userID]; ok {
+			out[userID] = participant
+		}
+	}
+	return out
+}
+
+func totalStake(participants []*roundParticipant) float64 {
+	total := 0.0
+	for _, participant := range participants {
+		if participant != nil {
+			total += participant.StakeUsd
+		}
+	}
+	return roundMoney(total)
+}
+
+func stakeFromParticipants(participants []*roundParticipant) float64 {
+	for _, participant := range participants {
+		if participant != nil {
+			return participant.StakeUsd
+		}
+	}
+	return 0
+}
+
+func (m *Manager) startDiceRoll(roomCode, roundID string) {
+	rollDeadline := time.Now().UTC().Add(diceRollWindow)
+
+	m.roomsMu.Lock()
+	room, ok := m.rooms[roomCode]
+	if !ok || room.Round == nil || room.Round.ID != roundID {
+		m.roomsMu.Unlock()
+		return
+	}
+	round := room.Round
+	if round.GameKey != "DICE_DUEL" || round.Status != "COLLECTING_ACTIONS" {
+		m.roomsMu.Unlock()
+		return
+	}
+
+	round.Status = "ROLLING"
+	round.ActionDeadline = time.Time{}
+	round.RollDeadline = rollDeadline
+	room.UpdatedAt = time.Now().UTC()
+
+	participants := cloneRoundParticipants(round.Participants)
+	actions := cloneRoundActions(round.Actions)
+	settledParticipants := participantsFromMap(round.SettledParticipants)
+	if len(settledParticipants) == 0 {
+		settledParticipants = participantsFromMap(participants)
+	}
+	stake := stakeFromParticipants(settledParticipants)
+	pot := roundMoney(totalStake(settledParticipants))
+	commission := roundMoney(pot * 0.15)
+	payload := RoomRoundStartedPayload{
+		RoomCode:         roomCode,
+		RoundID:          round.ID,
+		GameKey:          round.GameKey,
+		RequiresAction:   true,
+		ActionHint:       "Dice rolling. Losers drop after it stops.",
+		ActionCount:      len(actions),
+		PlayerCount:      len(participants),
+		StakeUsd:         stake,
+		PotUsd:           pot,
+		CommissionUsd:    commission,
+		DistributableUsd: roundMoney(pot - commission),
+		Choices:          roomRoundChoices(round.GameKey, participants, actions),
+		StartedAt:        round.StartedAt,
+		RollDeadline:     &rollDeadline,
+	}
+	memberIDs := room.memberIDs()
+	m.roomsMu.Unlock()
+
+	m.broadcastRoomRoundStarted(memberIDs, payload)
+	m.scheduleDiceRollDeadline(roomCode, roundID, rollDeadline)
+}
+
+func (m *Manager) startCoinFlip(roomCode, roundID string) {
+	rollDeadline := time.Now().UTC().Add(coinFlipWindow)
+
+	m.roomsMu.Lock()
+	room, ok := m.rooms[roomCode]
+	if !ok || room.Round == nil || room.Round.ID != roundID {
+		m.roomsMu.Unlock()
+		return
+	}
+	round := room.Round
+	if round.GameKey != "COIN_TOSS" || round.Status != "COLLECTING_ACTIONS" {
+		m.roomsMu.Unlock()
+		return
+	}
+
+	round.Status = "ROLLING"
+	round.ActionDeadline = time.Time{}
+	round.RollDeadline = rollDeadline
+	room.UpdatedAt = time.Now().UTC()
+
+	participants := cloneRoundParticipants(round.Participants)
+	actions := cloneRoundActions(round.Actions)
+	stake := stakeFromParticipants(participantsFromMap(participants))
+	pot := roundMoney(totalStake(participantsFromMap(participants)))
+	commission := roundMoney(pot * 0.15)
+	payload := RoomRoundStartedPayload{
+		RoomCode:         roomCode,
+		RoundID:          round.ID,
+		GameKey:          round.GameKey,
+		RequiresAction:   true,
+		ActionHint:       "Coin flipping. Matching picks win after it lands.",
+		ActionCount:      len(actions),
+		PlayerCount:      len(participants),
+		StakeUsd:         stake,
+		PotUsd:           pot,
+		CommissionUsd:    commission,
+		DistributableUsd: roundMoney(pot - commission),
+		Choices:          roomRoundChoices(round.GameKey, participants, actions),
+		StartedAt:        round.StartedAt,
+		RollDeadline:     &rollDeadline,
+	}
+	memberIDs := room.memberIDs()
+	m.roomsMu.Unlock()
+
+	m.broadcastRoomRoundStarted(memberIDs, payload)
+	m.scheduleCoinFlipDeadline(roomCode, roundID, rollDeadline)
+}
+
+func cloneRoundActions(src map[string]map[string]interface{}) map[string]map[string]interface{} {
+	out := make(map[string]map[string]interface{}, len(src))
+	for userID, action := range src {
+		dup := make(map[string]interface{}, len(action))
+		for key, value := range action {
+			dup[key] = value
+		}
+		out[userID] = dup
+	}
+	return out
+}
+
+func participantsFromMap(src map[string]*roundParticipant) []*roundParticipant {
+	out := make([]*roundParticipant, 0, len(src))
+	for _, participant := range src {
+		if participant == nil {
+			continue
+		}
+		cp := *participant
+		out = append(out, &cp)
+	}
+	return out
+}
+
+func (m *Manager) scheduleDicePickDeadline(roomCode, roundID string, deadline time.Time) {
+	if deadline.IsZero() {
+		return
+	}
+	delay := time.Until(deadline)
+	if delay < 0 {
+		delay = 0
+	}
+	time.AfterFunc(delay, func() {
+		m.startDiceRoll(roomCode, roundID)
+	})
+}
+
+func (m *Manager) scheduleDiceRollDeadline(roomCode, roundID string, deadline time.Time) {
+	if deadline.IsZero() {
+		return
+	}
+	delay := time.Until(deadline)
+	if delay < 0 {
+		delay = 0
+	}
+	time.AfterFunc(delay, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_, _ = m.ResolveRoomRound(ctx, roomCode, roundID)
+	})
+}
+
+func (m *Manager) scheduleCoinFlipDeadline(roomCode, roundID string, deadline time.Time) {
+	if deadline.IsZero() {
+		return
+	}
+	delay := time.Until(deadline)
+	if delay < 0 {
+		delay = 0
+	}
+	time.AfterFunc(delay, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_, _ = m.ResolveRoomRound(ctx, roomCode, roundID)
+	})
 }
 
 func withoutUser(list []string, userID string) []string {

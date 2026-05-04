@@ -70,7 +70,7 @@ func main() {
 	})
 
 	// --- Ledger Service (pure business logic, no Kafka) ---
-	svc := ledger.NewService(db, rdb)
+	svc := ledger.NewService(db, rdb, cfg.StartingBalanceUsd)
 
 	// --- Fiber App ---
 	app := fiber.New(fiber.Config{

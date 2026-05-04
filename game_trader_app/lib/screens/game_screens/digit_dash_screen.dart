@@ -80,6 +80,11 @@ class _DigitDashScreenState extends State<DigitDashScreen>
     return Scaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Digit Dash'),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: !_isSpinning,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: Stack(
         children: [
           SafeArea(
@@ -187,12 +192,6 @@ class _DigitDashScreenState extends State<DigitDashScreen>
                         value: stakeAmount,
                         enabled: !_isSpinning,
                         onChanged: (next) => setState(() => stakeAmount = next),
-                      ),
-                      const SizedBox(height: 12),
-                      PlayModeToggle(
-                        value: _playMode,
-                        enabled: !_isSpinning,
-                        onChanged: (mode) => setState(() => _playMode = mode),
                       ),
                       const SizedBox(height: 12),
                       Text(

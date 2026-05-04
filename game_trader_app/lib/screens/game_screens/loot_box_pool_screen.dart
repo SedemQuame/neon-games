@@ -328,6 +328,11 @@ class _LootBoxPoolScreenState extends State<LootBoxPoolScreen> {
     return Scaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Loot Box Pool (Multi)'),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: !_isDrawing,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -358,12 +363,6 @@ class _LootBoxPoolScreenState extends State<LootBoxPoolScreen> {
                     value: _stakeUsd,
                     enabled: !_isDrawing,
                     onChanged: (next) => setState(() => _stakeUsd = next),
-                  ),
-                  const SizedBox(height: 10),
-                  PlayModeToggle(
-                    value: _playMode,
-                    enabled: !_isDrawing,
-                    onChanged: (mode) => setState(() => _playMode = mode),
                   ),
                   const SizedBox(height: 10),
                   Align(

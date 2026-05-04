@@ -303,6 +303,11 @@ class _AviatorBoomCrashScreenState extends State<AviatorBoomCrashScreen>
     return Scaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Aviator Boom/Crash'),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: !_isFlying && !_isPlacing,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -403,12 +408,6 @@ class _AviatorBoomCrashScreenState extends State<AviatorBoomCrashScreen>
                     value: stakeAmount,
                     enabled: !_isFlying && !_isPlacing,
                     onChanged: (next) => setState(() => stakeAmount = next),
-                  ),
-                  const SizedBox(height: 10),
-                  PlayModeToggle(
-                    value: _playMode,
-                    enabled: !_isFlying && !_isPlacing,
-                    onChanged: (mode) => setState(() => _playMode = mode),
                   ),
                   const SizedBox(height: 10),
                   Row(

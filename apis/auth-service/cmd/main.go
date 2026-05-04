@@ -53,6 +53,14 @@ var (
 	firebaseCertCache  = &firebasePublicKeyCache{}
 	allowAllOrigins    bool
 	allowedOriginSet   map[string]struct{}
+
+	guestNameAdjectives = []string{
+		"Arcade", "Blaze", "Cosmic", "Flash", "Grid", "Lucky", "Neon", "Nova",
+		"Pixel", "Prime", "Rapid", "Rocket", "Turbo", "Vector", "Victory", "Volt",
+	}
+	guestNameNouns = []string{
+		"Ace", "Pilot", "Player", "Rider", "Runner", "Spinner", "Trader", "Winner",
+	}
 )
 
 const (
@@ -676,7 +684,12 @@ func handleEmailResetPassword(w http.ResponseWriter, r *http.Request) {
 func handleGuestStart(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	now := time.Now()
+	userID := primitive.NewObjectID()
+	displayName := generateGuestDisplayName()
 	doc := bson.M{
+		"_id":           userID,
+		"username":      guestUsername(displayName),
+		"fullName":      displayName,
 		"isGuest":       true,
 		"authProviders": []string{"guest"},
 		"kycStatus":     "NONE",
@@ -685,20 +698,17 @@ func handleGuestStart(w http.ResponseWriter, r *http.Request) {
 		"updatedAt":     now,
 		"expiresAt":     now.Add(24 * time.Hour),
 	}
-	res, err := db.Collection("users").InsertOne(ctx, doc)
-	if err != nil {
+	if _, err := db.Collection("users").InsertOne(ctx, doc); err != nil {
 		respondError(w, 500, "failed to create guest user")
 		return
 	}
-	userID := res.InsertedID.(primitive.ObjectID).Hex()
-	triggerWalletGeneration(userID)
-	accessToken, refreshToken, err := issueTokenPair(ctx, userID, "guest")
+	triggerWalletGeneration(userID.Hex())
+	accessToken, refreshToken, err := issueTokenPair(ctx, userID.Hex(), "guest")
 	if err != nil {
 		respondError(w, 500, "failed to issue tokens")
 		return
 	}
 
-	doc["_id"] = res.InsertedID
 	respondJSON(w, 201, map[string]interface{}{
 		"accessToken":  accessToken,
 		"refreshToken": refreshToken,
@@ -998,18 +1008,24 @@ func upsertUserByFirebase(ctx context.Context, identity firebaseIdentity) (bson.
 	guestExpiry := now.Add(24 * time.Hour)
 
 	if existing == nil {
+		username := deriveUsername(
+			identity.FullName,
+			identity.Email,
+			identity.ProviderName,
+		)
+		guestDisplayName := ""
+		if identity.IsGuest {
+			guestDisplayName = generateGuestDisplayName()
+			username = guestUsername(guestDisplayName)
+		}
 		doc := bson.M{
 			"firebaseUid": identity.UID,
-			"username": deriveUsername(
-				identity.FullName,
-				identity.Email,
-				identity.ProviderName,
-			),
-			"isGuest":   identity.IsGuest,
-			"kycStatus": "NONE",
-			"tier":      "BRONZE",
-			"createdAt": now,
-			"updatedAt": now,
+			"username":    username,
+			"isGuest":     identity.IsGuest,
+			"kycStatus":   "NONE",
+			"tier":        "BRONZE",
+			"createdAt":   now,
+			"updatedAt":   now,
 		}
 		authProviders := []string{"firebase"}
 		if identity.ProviderName != "" {
@@ -1021,6 +1037,9 @@ func upsertUserByFirebase(ctx context.Context, identity firebaseIdentity) (bson.
 		}
 		if identity.FullName != "" {
 			doc["fullName"] = identity.FullName
+		}
+		if guestDisplayName != "" {
+			doc["fullName"] = guestDisplayName
 		}
 		if identity.AvatarURL != "" {
 			doc["avatarUrl"] = identity.AvatarURL
@@ -1054,7 +1073,12 @@ func upsertUserByFirebase(ctx context.Context, identity firebaseIdentity) (bson.
 		setFields["avatarUrl"] = identity.AvatarURL
 	}
 	username, _ := existing["username"].(string)
-	if strings.TrimSpace(username) == "" {
+	fullName, _ := existing["fullName"].(string)
+	if identity.IsGuest && shouldRefreshGuestName(username, fullName) {
+		guestDisplayName := generateGuestDisplayName()
+		setFields["username"] = guestUsername(guestDisplayName)
+		setFields["fullName"] = guestDisplayName
+	} else if strings.TrimSpace(username) == "" {
 		setFields["username"] = deriveUsername(
 			identity.FullName,
 			identity.Email,
@@ -1504,6 +1528,51 @@ func extractUserID(user bson.M) (string, error) {
 	default:
 		return "", errors.New("user id missing")
 	}
+}
+
+func generateGuestDisplayName() string {
+	adjective := guestNameAdjectives[secureIndex(len(guestNameAdjectives))]
+	noun := guestNameNouns[secureIndex(len(guestNameNouns))]
+	number := 1000 + secureIndex(9000)
+	return fmt.Sprintf("%s%s%d", adjective, noun, number)
+}
+
+func secureIndex(max int) int {
+	if max <= 1 {
+		return 0
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		return int(time.Now().UnixNano() % int64(max))
+	}
+	return int(n.Int64())
+}
+
+func guestUsername(displayName string) string {
+	if username := slugifyUsername(displayName); username != "" {
+		return username
+	}
+	return strings.ToLower(generateGuestDisplayName())
+}
+
+func shouldRefreshGuestName(username, fullName string) bool {
+	fullName = strings.TrimSpace(fullName)
+	if fullName != "" {
+		return isLegacyGuestName(fullName)
+	}
+	return isLegacyGuestName(username)
+}
+
+func isLegacyGuestName(name string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	if normalized == "" {
+		return true
+	}
+	return strings.HasPrefix(normalized, "guest-") ||
+		strings.HasPrefix(normalized, "firebase-") ||
+		strings.HasPrefix(normalized, "user-") ||
+		normalized == "guest" ||
+		normalized == "pilot"
 }
 
 func deriveUsername(fullName, email, provider string) string {

@@ -35,6 +35,11 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
     return Scaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Edge Runner'),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: !_isPlacing,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: Stack(
         children: [
           SafeArea(
@@ -198,12 +203,6 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
                         value: stakeAmount,
                         enabled: !_isPlacing,
                         onChanged: (next) => setState(() => stakeAmount = next),
-                      ),
-                      const SizedBox(height: 12),
-                      PlayModeToggle(
-                        value: _playMode,
-                        enabled: !_isPlacing,
-                        onChanged: (mode) => setState(() => _playMode = mode),
                       ),
                       const SizedBox(height: 16),
                       // Action Buttons

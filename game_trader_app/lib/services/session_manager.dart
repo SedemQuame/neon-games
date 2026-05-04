@@ -130,6 +130,7 @@ class SessionManager extends ChangeNotifier {
 
   Future<void> ensureGameSocket() async {
     if (_session == null) return;
+    if (_game.isConnected) return;
     await _tryRefreshSession();
     final token = _session?.accessToken;
     if (token == null || token.isEmpty) {

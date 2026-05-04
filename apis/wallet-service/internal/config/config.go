@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -18,6 +19,7 @@ type Config struct {
 	AppEnv             string
 	JWTPublicKeyPath   string
 	JWTIssuer          string
+	StartingBalanceUsd float64
 }
 
 func Load() *Config {
@@ -31,6 +33,7 @@ func Load() *Config {
 		AppEnv:             getEnv("APP_ENV", "development"),
 		JWTPublicKeyPath:   getEnv("JWT_PUBLIC_KEY_PATH", ""),
 		JWTIssuer:          getEnv("JWT_ISSUER", "gamehub-auth"),
+		StartingBalanceUsd: getEnvFloat("STARTING_BALANCE_USD", 100),
 	}
 	return cfg
 }
@@ -46,6 +49,17 @@ func mustGetEnv(key string) string {
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getEnvFloat(key string, fallback float64) float64 {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err == nil {
+			return parsed
+		}
+		log.Printf("invalid %s=%q, using %.2f", key, v, fallback)
 	}
 	return fallback
 }

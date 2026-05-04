@@ -23,22 +23,28 @@ var (
 )
 
 type Service struct {
-	client      *mongo.Client
-	balances    *mongo.Collection
-	entries     *mongo.Collection
-	withdrawals *mongo.Collection
-	bets        *mongo.Collection
-	rdb         *redis.Client
+	client             *mongo.Client
+	balances           *mongo.Collection
+	entries            *mongo.Collection
+	withdrawals        *mongo.Collection
+	bets               *mongo.Collection
+	rdb                *redis.Client
+	startingBalanceUsd float64
 }
 
-func NewService(db *mongo.Database, rdb *redis.Client) *Service {
+func NewService(db *mongo.Database, rdb *redis.Client, startingBalanceUsd ...float64) *Service {
+	initialGrant := 0.0
+	if len(startingBalanceUsd) > 0 && startingBalanceUsd[0] > 0 {
+		initialGrant = startingBalanceUsd[0]
+	}
 	return &Service{
-		client:      db.Client(),
-		balances:    db.Collection("wallet_balances"),
-		entries:     db.Collection("ledger_entries"),
-		withdrawals: db.Collection("withdrawals"),
-		bets:        db.Collection("bet_reservations"),
-		rdb:         rdb,
+		client:             db.Client(),
+		balances:           db.Collection("wallet_balances"),
+		entries:            db.Collection("ledger_entries"),
+		withdrawals:        db.Collection("withdrawals"),
+		bets:               db.Collection("bet_reservations"),
+		rdb:                rdb,
+		startingBalanceUsd: initialGrant,
 	}
 }
 
@@ -109,6 +115,13 @@ type GameSettlementRequest struct {
 }
 
 func (s *Service) GetBalance(ctx context.Context, userID string) (*Balance, error) {
+	if err := s.grantStartingBalanceIfNeeded(ctx, userID); err != nil {
+		return nil, err
+	}
+	return s.readBalance(ctx, userID)
+}
+
+func (s *Service) readBalance(ctx context.Context, userID string) (*Balance, error) {
 	var doc balanceDoc
 	err := s.balances.FindOne(ctx, bson.M{"userId": userID}).Decode(&doc)
 	if err == mongo.ErrNoDocuments {
@@ -307,11 +320,14 @@ func (s *Service) ReleaseWithdrawal(ctx context.Context, req WithdrawalReleaseRe
 }
 
 func (s *Service) ReserveBet(ctx context.Context, req BetReserveRequest) (*Balance, error) {
+	if err := s.grantStartingBalanceIfNeeded(ctx, req.UserID); err != nil {
+		return nil, err
+	}
 	var result *Balance
 	err := s.executeTx(ctx, func(tx mongo.SessionContext) error {
 		var existing bson.M
 		if err := s.bets.FindOne(tx, bson.M{"_id": req.SessionID}).Decode(&existing); err == nil {
-			bal, err := s.GetBalance(tx, req.UserID)
+			bal, err := s.readBalance(tx, req.UserID)
 			result = bal
 			return err
 		} else if err != mongo.ErrNoDocuments {
@@ -482,6 +498,66 @@ func (s *Service) incrementAvailable(ctx context.Context, userID string, amount 
 	return doc.toBalance(), nil
 }
 
+func (s *Service) grantStartingBalanceIfNeeded(ctx context.Context, userID string) error {
+	if s.startingBalanceUsd <= 0 || strings.TrimSpace(userID) == "" {
+		return nil
+	}
+
+	now := time.Now()
+	var existing balanceDoc
+	err := s.balances.FindOne(ctx, bson.M{"userId": userID}).Decode(&existing)
+	if err == nil && existing.StartingBalanceGranted {
+		return nil
+	}
+	if err != nil && err != mongo.ErrNoDocuments {
+		return err
+	}
+
+	filter := bson.M{
+		"userId":                 userID,
+		"startingBalanceGranted": bson.M{"$ne": true},
+	}
+	update := bson.M{
+		"$inc": bson.M{"availableUsd": s.startingBalanceUsd},
+		"$set": bson.M{
+			"startingBalanceGranted": true,
+			"updatedAt":              now,
+		},
+		"$setOnInsert": bson.M{
+			"userId":      userID,
+			"reservedUsd": 0,
+			"createdAt":   now,
+		},
+	}
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	var doc balanceDoc
+	err = s.balances.FindOneAndUpdate(ctx, filter, update, opts).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil
+	}
+	if mongo.IsDuplicateKeyError(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	entry := LedgerEntry{
+		UserID:           userID,
+		Type:             "STARTING_BALANCE",
+		AmountUsd:        s.startingBalanceUsd,
+		Reference:        fmt.Sprintf("starting-balance:%s", userID),
+		Metadata:         bson.M{"source": "account_starting_balance"},
+		BalanceAvailable: doc.Available,
+		BalanceReserved:  doc.Reserved,
+		CreatedAt:        now,
+	}
+	if _, err := s.entries.InsertOne(ctx, entry); err != nil && !mongo.IsDuplicateKeyError(err) {
+		log.Printf("starting balance ledger entry failed for user=%s: %v", userID, err)
+	}
+	return nil
+}
+
 func (s *Service) moveAvailableToReserved(ctx context.Context, userID string, amount float64) (*Balance, error) {
 	now := time.Now()
 	filter := bson.M{
@@ -559,11 +635,12 @@ func metadataWithTrace(base bson.M, traceID string) bson.M {
 }
 
 type balanceDoc struct {
-	UserID    string    `bson:"userId"`
-	Available float64   `bson:"availableUsd"`
-	Reserved  float64   `bson:"reservedUsd"`
-	CreatedAt time.Time `bson:"createdAt"`
-	UpdatedAt time.Time `bson:"updatedAt"`
+	UserID                 string    `bson:"userId"`
+	Available              float64   `bson:"availableUsd"`
+	Reserved               float64   `bson:"reservedUsd"`
+	StartingBalanceGranted bool      `bson:"startingBalanceGranted"`
+	CreatedAt              time.Time `bson:"createdAt"`
+	UpdatedAt              time.Time `bson:"updatedAt"`
 }
 
 func (b balanceDoc) toBalance() *Balance {

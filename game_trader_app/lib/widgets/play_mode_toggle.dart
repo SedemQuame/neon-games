@@ -47,6 +47,38 @@ class PlayModeToggle extends StatelessWidget {
   }
 }
 
+class PlayModeBottomBar extends StatelessWidget {
+  const PlayModeBottomBar({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final PlayMode value;
+  final ValueChanged<PlayMode> onChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        decoration: const BoxDecoration(
+          color: AppTheme.gameBackground,
+          border: Border(top: BorderSide(color: AppTheme.gameBorder)),
+        ),
+        child: PlayModeToggle(
+          value: value,
+          enabled: enabled,
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
 class _ModeSegment extends StatelessWidget {
   const _ModeSegment({
     required this.label,

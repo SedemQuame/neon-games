@@ -219,6 +219,11 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
     return Scaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Even or Odd'),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: gamePhase == GamePhase.idle && !_isPlacing,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: Stack(
         children: [
           Positioned.fill(child: Container(color: AppTheme.gameBackground)),
@@ -301,15 +306,6 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
                           enabled: gamePhase == GamePhase.idle && !_isPlacing,
                           onChanged: (next) =>
                               setState(() => stakeAmount = next),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                        child: PlayModeToggle(
-                          value: _playMode,
-                          enabled: gamePhase == GamePhase.idle && !_isPlacing,
-                          onChanged: (mode) => setState(() => _playMode = mode),
                         ),
                       ),
                       const SizedBox(height: 16),

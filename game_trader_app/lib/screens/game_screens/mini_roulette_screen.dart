@@ -261,6 +261,11 @@ class _MiniRouletteScreenState extends State<MiniRouletteScreen>
     return Scaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Mini Roulette'),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: !_isPlacing && !_isSpinning,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -294,12 +299,6 @@ class _MiniRouletteScreenState extends State<MiniRouletteScreen>
                     value: _stakeUsd,
                     enabled: !_isPlacing && !_isSpinning,
                     onChanged: (next) => setState(() => _stakeUsd = next),
-                  ),
-                  const SizedBox(height: 10),
-                  PlayModeToggle(
-                    value: _playMode,
-                    enabled: !_isPlacing && !_isSpinning,
-                    onChanged: (mode) => setState(() => _playMode = mode),
                   ),
                   const SizedBox(height: 10),
                   Align(

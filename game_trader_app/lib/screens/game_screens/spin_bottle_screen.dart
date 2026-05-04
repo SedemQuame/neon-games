@@ -223,6 +223,11 @@ class _SpinBottleScreenState extends State<SpinBottleScreen> {
       appBar: GameActivityAppBar(
         title: _isMultiplayer ? 'Spin the Bottle (Multi)' : 'Spin the Bottle',
       ),
+      bottomNavigationBar: PlayModeBottomBar(
+        value: _playMode,
+        enabled: !_isSpinning,
+        onChanged: (mode) => setState(() => _playMode = mode),
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -387,12 +392,6 @@ class _SpinBottleScreenState extends State<SpinBottleScreen> {
                     value: _stakeUsd,
                     enabled: !_isSpinning,
                     onChanged: (next) => setState(() => _stakeUsd = next),
-                  ),
-                  const SizedBox(height: 10),
-                  PlayModeToggle(
-                    value: _playMode,
-                    enabled: !_isSpinning,
-                    onChanged: (mode) => setState(() => _playMode = mode),
                   ),
                   if (_isMultiplayer) ...[
                     const SizedBox(height: 10),

@@ -10,10 +10,16 @@ class AuthSession {
   final Map<String, dynamic> user;
 
   String get userId => user['id']?.toString() ?? '';
-  String get username => user['username']?.toString() ?? 'Pilot';
   bool get isGuest => user['isGuest'] == true;
+  String get username {
+    final value = user['username']?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+    if (isGuest) return fallbackGuestDisplayName(userId);
+    return 'Pilot';
+  }
+
   String get displayName {
-    final fullName = user['fullName']?.toString() ?? '';
+    final fullName = user['fullName']?.toString().trim() ?? '';
     if (fullName.isNotEmpty) {
       return fullName;
     }
@@ -27,6 +33,51 @@ class AuthSession {
       user: (json['user'] as Map?)?.cast<String, dynamic>() ?? const {},
     );
   }
+}
+
+const _guestNameAdjectives = [
+  'Arcade',
+  'Blaze',
+  'Cosmic',
+  'Flash',
+  'Grid',
+  'Lucky',
+  'Neon',
+  'Nova',
+  'Pixel',
+  'Prime',
+  'Rapid',
+  'Rocket',
+  'Turbo',
+  'Vector',
+  'Victory',
+  'Volt',
+];
+
+const _guestNameNouns = [
+  'Ace',
+  'Pilot',
+  'Player',
+  'Rider',
+  'Runner',
+  'Spinner',
+  'Trader',
+  'Winner',
+];
+
+String fallbackGuestDisplayName(String userId) {
+  final value = userId.trim().isEmpty ? 'guest' : userId.trim();
+  var hash = 2166136261;
+  for (final unit in value.codeUnits) {
+    hash ^= unit;
+    hash = (hash * 16777619) & 0xffffffff;
+  }
+  final adjective = _guestNameAdjectives[hash % _guestNameAdjectives.length];
+  final noun =
+      _guestNameNouns[(hash ~/ _guestNameAdjectives.length) %
+          _guestNameNouns.length];
+  final number = 1000 + (hash % 9000);
+  return '$adjective$noun$number';
 }
 
 class WalletBalance {
