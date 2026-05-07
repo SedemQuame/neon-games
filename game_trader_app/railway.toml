@@ -2,8 +2,8 @@
 dockerfilePath = "Dockerfile"
 
 [build.args]
-# Set this to your Railway backend service URL
-GAMEHUB_BASE_URL = "${GAMEHUB_BASE_URL}"
+# Flutter web bakes this value into the compiled app at build time.
+GAMEHUB_BASE_URL = "https://neon-games-production.up.railway.app"
 
 [deploy]
 healthcheckPath = "/healthz"

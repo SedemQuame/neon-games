@@ -103,13 +103,13 @@ cd game_trader_app
 flutter pub get
 dart pub global activate flutterfire_cli
 flutterfire configure --project=glory-grid-b90a3
-flutter run --dart-define=GAMEHUB_BASE_URL=http://127.0.0.1
+flutter run --dart-define=GAMEHUB_BASE_URL=https://neon-games-production.up.railway.app
 ```
 
 The app reads its API base URL from `GAMEHUB_BASE_URL`. If you do not pass it, the default is:
 
 ```text
-http://127.0.0.1
+https://neon-games-production.up.railway.app
 ```
 
 For a physical device, pass a base URL the phone can actually reach, such as a LAN IP or tunnel URL.
@@ -121,18 +121,27 @@ cd game_trader_app
 flutter run -d chrome \
   --web-hostname localhost \
   --web-port 7357 \
-  --dart-define=GAMEHUB_BASE_URL=http://127.0.0.1
+  --dart-define=GAMEHUB_BASE_URL=https://neon-games-production.up.railway.app
 ```
 
-### 4. Run the web app via Docker (prebuilt artifact)
+For web releases, Flutter bakes the backend URL into the JavaScript bundle at build time. Use the production env file or export the variable before building:
 
-If you prefer to build once and serve that exact build artifact:
+```bash
+cp game_trader_app/.env.production.example game_trader_app/.env.production
+export GAMEHUB_BASE_URL=https://neon-games-production.up.railway.app
+./scripts/web_release.sh
+```
+
+### 4. Run the web app via Docker
+
+The Dockerfile also defaults to the production backend URL. Override the build argument only when you intentionally need another backend:
 
 ```bash
 cd game_trader_app
-flutter build web --release --dart-define=GAMEHUB_BASE_URL=http://127.0.0.1
-docker build --target prebuilt -t gamehub-web .
-docker run --rm -p 8080:80 gamehub-web
+docker build \
+  --build-arg GAMEHUB_BASE_URL=https://neon-games-production.up.railway.app \
+  -t gamehub-web .
+docker run --rm -p 8080:8080 gamehub-web
 ```
 
 Then open `http://localhost:8080`.

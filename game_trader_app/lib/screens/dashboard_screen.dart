@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
+import '../services/game_service.dart';
 import '../services/models.dart';
 import '../services/session_manager.dart';
 import '../utils/format.dart';
@@ -33,6 +36,9 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   WalletBalance? _balance;
+  StreamSubscription<GameEvent>? _gameEventsSub;
+  Timer? _liveStatsTimer;
+  int? _livePlayers;
   bool _loadingBalance = false;
   bool _showAllGames = false;
   bool _handledInitialArenaLink = false;
@@ -41,10 +47,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _gameEventsSub = context.read<SessionManager>().gameEvents.listen(
+      _handleGameEvent,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshBalance();
+      _refreshLiveStats();
+      _liveStatsTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _refreshLiveStats(),
+      );
       _openArenaLinkIfPresent();
     });
+  }
+
+  @override
+  void dispose() {
+    _liveStatsTimer?.cancel();
+    _gameEventsSub?.cancel();
+    super.dispose();
+  }
+
+  void _handleGameEvent(GameEvent event) {
+    int? livePlayers;
+    if (event is LiveStatsEvent) {
+      livePlayers = event.livePlayers;
+    } else if (event is GameConnectedEvent) {
+      livePlayers = event.livePlayers ?? 1;
+    }
+    if (livePlayers == null || !mounted) {
+      return;
+    }
+    setState(() => _livePlayers = livePlayers);
+  }
+
+  Future<void> _refreshLiveStats() async {
+    final session = context.read<SessionManager>();
+    if (!session.isAuthenticated) {
+      if (mounted) {
+        setState(() => _livePlayers = 0);
+      }
+      return;
+    }
+    try {
+      await session.ensureGameSocket();
+      if (mounted && _livePlayers == null) {
+        setState(() => _livePlayers = 1);
+      }
+      session.gameService.requestLiveStats();
+    } catch (_) {
+      // Keep the last known count if the socket is temporarily unavailable.
+    }
   }
 
   Future<void> _refreshBalance() async {
@@ -149,50 +202,80 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return CasinoScaffold(
       appBar: const CasinoTopNav(title: 'Glory Grid'),
       bottomNavigationBar: const SharedBottomNav(currentIndex: 0),
+      maxContentWidth: 1120,
       body: RefreshIndicator(
         onRefresh: _refreshBalance,
-        child: ListView(
-          padding: EdgeInsets.only(top: context.space.md, bottom: 96),
-          children: [
-            _buildHeroSummary(),
-            SizedBox(height: context.space.md),
-            FilterChipRow(
-              options: const ['All', 'Featured', 'Solo', 'Multiplayer'],
-              selected: _selectedCategory,
-              onSelected: (value) => setState(() => _selectedCategory = value),
-            ),
-            SizedBox(height: context.space.md),
-            SectionHeader(
-              title: 'Featured',
-              actionLabel: hasOverflow
-                  ? (_showAllGames ? 'Show less' : 'See all')
-                  : null,
-              onAction: hasOverflow
-                  ? () => setState(() => _showAllGames = !_showAllGames)
-                  : null,
-            ),
-            SizedBox(height: context.space.md),
-            if (allGames.isNotEmpty) _buildFeaturedGamePanel(allGames.first),
-            if (showSolo) ...[
-              SizedBox(height: context.space.lg),
-              _buildModeSection(
-                title: 'Solo Games',
-                subtitle: 'Solo rounds',
-                icon: Icons.person,
-                games: soloGames,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 900;
+            final content = ListView(
+              padding: isDesktop
+                  ? EdgeInsets.fromLTRB(
+                      context.space.lg,
+                      context.space.lg,
+                      context.space.lg,
+                      96,
+                    )
+                  : EdgeInsets.only(top: context.space.md, bottom: 96),
+              children: [
+                _buildHeroSummary(),
+                SizedBox(height: context.space.md),
+                FilterChipRow(
+                  options: const ['All', 'Featured', 'Solo', 'Multiplayer'],
+                  selected: _selectedCategory,
+                  onSelected: (value) =>
+                      setState(() => _selectedCategory = value),
+                ),
+                SizedBox(height: context.space.md),
+                SectionHeader(
+                  title: 'Featured',
+                  actionLabel: hasOverflow
+                      ? (_showAllGames ? 'Show less' : 'See all')
+                      : null,
+                  onAction: hasOverflow
+                      ? () => setState(() => _showAllGames = !_showAllGames)
+                      : null,
+                ),
+                SizedBox(height: context.space.md),
+                if (allGames.isNotEmpty)
+                  _buildFeaturedGamePanel(allGames.first),
+                if (showSolo) ...[
+                  SizedBox(height: context.space.lg),
+                  _buildModeSection(
+                    title: 'Solo Games',
+                    subtitle: 'Solo rounds',
+                    icon: Icons.person,
+                    games: soloGames,
+                  ),
+                ],
+                if (showMultiplayer) ...[
+                  SizedBox(height: context.space.lg),
+                  _buildModeSection(
+                    title: 'Multiplayer Games',
+                    subtitle: 'Rooms',
+                    icon: Icons.groups_2_outlined,
+                    games: multiplayerGames,
+                    intro: _buildMultiplayerSpotlight(),
+                  ),
+                ],
+              ],
+            );
+            if (!isDesktop) {
+              return content;
+            }
+            return Container(
+              margin: EdgeInsets.symmetric(vertical: context.space.lg),
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: context.colors.bgSurface.withValues(alpha: 0.24),
+                borderRadius: BorderRadius.circular(context.radii.xl),
+                border: Border.all(
+                  color: context.colors.border.withValues(alpha: 0.72),
+                ),
               ),
-            ],
-            if (showMultiplayer) ...[
-              SizedBox(height: context.space.lg),
-              _buildModeSection(
-                title: 'Multiplayer Games',
-                subtitle: 'Rooms',
-                icon: Icons.groups_2_outlined,
-                games: multiplayerGames,
-                intro: _buildMultiplayerSpotlight(),
-              ),
-            ],
-          ],
+              child: content,
+            );
+          },
         ),
       ),
     );
@@ -431,6 +514,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildHeroSummary() {
     final available = _balance?.availableUsd ?? 0;
+    final liveLabel = _livePlayers == null ? 'Live ...' : '$_livePlayers Live';
 
     return SurfaceCard(
       padding: EdgeInsets.all(context.space.lg),
@@ -478,9 +562,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Wrap(
                       spacing: context.space.xs,
                       runSpacing: context.space.xs,
-                      children: const [
-                        _LivePill(label: '428 Live'),
-                        _LivePill(label: 'Live Wallet'),
+                      children: [
+                        _LivePill(label: liveLabel),
+                        const _LivePill(label: 'Live Wallet'),
                       ],
                     ),
                   ],

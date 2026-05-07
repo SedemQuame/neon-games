@@ -18,7 +18,7 @@ class ApiClient {
     'GAMEHUB_BASE_URL',
     defaultValue: '',
   );
-  static const String _releaseDefaultBaseUrl =
+  static const String _defaultBaseUrl =
       'https://neon-games-production.up.railway.app';
 
   Uri _buildUri(String path, [Map<String, dynamic>? query]) {
@@ -181,7 +181,7 @@ class ApiClient {
     if (_baseUrlDefine.trim().isNotEmpty) {
       return _baseUrlDefine.trim();
     }
-    return kReleaseMode ? _releaseDefaultBaseUrl : 'http://127.0.0.1';
+    return _defaultBaseUrl;
   }
 
   void _logResponse(String method, Uri uri, int status, DateTime started) {

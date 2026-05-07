@@ -95,6 +95,7 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 	conn.WriteJSON(fiber.Map{
 		"type":        "CONNECTED",
 		"userId":      userID,
+		"livePlayers": h.mgr.LivePlayerCount(),
 		"connectedAt": time.Now().UTC(),
 	})
 	if snapshot, ok := h.mgr.GetUserRoomSnapshot(userID); ok {
@@ -205,6 +206,13 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 			conn.WriteJSON(fiber.Map{
 				"type":    "ROOM_LIST",
 				"payload": fiber.Map{"rooms": items},
+			})
+		case "GET_LIVE_STATS":
+			conn.WriteJSON(fiber.Map{
+				"type": "LIVE_STATS",
+				"payload": fiber.Map{
+					"livePlayers": h.mgr.LivePlayerCount(),
+				},
 			})
 		case "JOIN_ROOM":
 			var req session.JoinRoomRequest

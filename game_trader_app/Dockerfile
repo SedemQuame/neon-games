@@ -9,7 +9,8 @@ RUN flutter pub get
 # Copy app sources and build fresh web artifacts for each image build.
 COPY . .
 
-ARG GAMEHUB_BASE_URL=http://127.0.0.1
+ARG GAMEHUB_BASE_URL=https://neon-games-production.up.railway.app
+ENV GAMEHUB_BASE_URL=${GAMEHUB_BASE_URL}
 RUN flutter build web --release --dart-define=GAMEHUB_BASE_URL=${GAMEHUB_BASE_URL}
 
 FROM nginx:alpine

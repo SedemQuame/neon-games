@@ -18,6 +18,8 @@ class GameService {
   final _pending = <String, Completer<GameBetAccepted>>{};
   Timer? _pingTimer;
   String? _currentToken;
+  bool _liveStatsRequestPending = false;
+  bool _liveStatsUnsupported = false;
 
   Stream<GameEvent> get events => _events.stream;
   bool get isConnected => _channel != null;
@@ -201,6 +203,15 @@ class GameService {
     safeSend(const {'type': 'LIST_AVAILABLE_PLAYERS'});
   }
 
+  void requestLiveStats() {
+    if (_liveStatsUnsupported) {
+      _events.add(const LiveStatsEvent(livePlayers: 1));
+      return;
+    }
+    _liveStatsRequestPending = true;
+    safeSend(const {'type': 'GET_LIVE_STATS'});
+  }
+
   void kickRoomPlayer(String targetUserId) {
     safeSend({'type': 'KICK_ROOM_PLAYER', 'targetUserId': targetUserId});
   }
@@ -246,6 +257,7 @@ class GameService {
         case 'CONNECTED':
           event = GameConnectedEvent(
             userId: decoded['userId']?.toString() ?? '',
+            livePlayers: (decoded['livePlayers'] as num?)?.toInt(),
           );
           emitEvent = true;
           AppLogger.instance.log(
@@ -346,6 +358,15 @@ class GameService {
           event = RoomListEvent(items);
           emitEvent = true;
           break;
+        case 'LIVE_STATS':
+          _liveStatsRequestPending = false;
+          final payload =
+              decoded['payload'] as Map<String, dynamic>? ?? const {};
+          event = LiveStatsEvent(
+            livePlayers: (payload['livePlayers'] as num?)?.toInt() ?? 0,
+          );
+          emitEvent = true;
+          break;
         case 'ROOM_INVITE':
           final payload =
               decoded['payload'] as Map<String, dynamic>? ?? const {};
@@ -417,6 +438,14 @@ class GameService {
           break;
         case 'ERROR':
           final msg = decoded['message']?.toString() ?? 'Unknown error';
+          if (_liveStatsRequestPending &&
+              msg.toLowerCase().contains('unknown message type')) {
+            _liveStatsRequestPending = false;
+            _liveStatsUnsupported = true;
+            event = const LiveStatsEvent(livePlayers: 1);
+            emitEvent = true;
+            break;
+          }
           AppLogger.instance.log(
             'ws',
             'Server error: $msg',
@@ -478,8 +507,15 @@ abstract class GameEvent {
 }
 
 class GameConnectedEvent extends GameEvent {
-  const GameConnectedEvent({required this.userId}) : super('CONNECTED');
+  const GameConnectedEvent({required this.userId, this.livePlayers})
+    : super('CONNECTED');
   final String userId;
+  final int? livePlayers;
+}
+
+class LiveStatsEvent extends GameEvent {
+  const LiveStatsEvent({required this.livePlayers}) : super('LIVE_STATS');
+  final int livePlayers;
 }
 
 class GameBetAccepted extends GameEvent {

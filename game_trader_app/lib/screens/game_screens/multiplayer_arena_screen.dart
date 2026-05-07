@@ -463,7 +463,8 @@ class _MultiplayerArenaScreenState extends State<MultiplayerArenaScreen> {
         _round == null;
     final shouldResetStatus =
         currentStatus.startsWith('Join or create ') ||
-        currentStatus.startsWith('Opening room ');
+        currentStatus.startsWith('Opening room ') ||
+        currentStatus.startsWith('Room connection lost.');
     setState(() {
       _room = room;
       _selected = selectedDef;
@@ -5687,7 +5688,7 @@ class _MultiplayerArenaScreenState extends State<MultiplayerArenaScreen> {
           Row(
             children: [
               Expanded(
-                child: PrimaryButton(
+                child: _StableGoldRoomButton(
                   expanded: true,
                   label: _pendingHostReadyHandoff
                       ? 'READYING...'
@@ -6766,6 +6767,66 @@ class _MetaPill extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StableGoldRoomButton extends StatelessWidget {
+  const _StableGoldRoomButton({
+    required this.label,
+    required this.onPressed,
+    this.expanded = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    final radius = BorderRadius.circular(context.radii.lg);
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      child: MouseRegion(
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: 44,
+              minWidth: expanded ? double.infinity : 120,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppTheme.primaryColor,
+                borderRadius: radius,
+                border: Border.all(color: AppTheme.goldButtonBottom),
+              ),
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.space.lg,
+                    vertical: context.space.sm,
+                  ),
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: context.type.bodyStrong.copyWith(
+                      color: AppTheme.goldText,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

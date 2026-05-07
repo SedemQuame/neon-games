@@ -1,17 +1,23 @@
-# game_trader_app
+# Glory Grid Flutter App
 
-A new Flutter project.
+The web build uses `GAMEHUB_BASE_URL` at compile time. The production value is:
 
-## Getting Started
+```text
+https://neon-games-production.up.railway.app
+```
 
-This project is a starting point for a Flutter application.
+For local web release builds:
 
-A few resources to get you started if this is your first Flutter project:
+```bash
+cp .env.production.example .env.production
+../scripts/web_release.sh
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Or run directly:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter build web --release \
+  --dart-define=GAMEHUB_BASE_URL=https://neon-games-production.up.railway.app
+```
+
+Do not rely on runtime browser environment variables for Flutter web; the URL is compiled into `build/web/main.dart.js`.

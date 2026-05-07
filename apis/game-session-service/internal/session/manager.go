@@ -217,6 +217,18 @@ func (m *Manager) Subscribe(userID string) (chan []byte, func()) {
 	return ch, unsubscribe
 }
 
+func (m *Manager) LivePlayerCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	count := 0
+	for _, subs := range m.subscribers {
+		if len(subs) > 0 {
+			count++
+		}
+	}
+	return count
+}
+
 func (m *Manager) broadcast(userID string, payload interface{}) {
 	data, err := json.Marshal(payload)
 	if err != nil {
