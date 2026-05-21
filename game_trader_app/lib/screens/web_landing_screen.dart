@@ -8,6 +8,10 @@ import '../widgets/casino_top_nav.dart';
 import '../widgets/section_header.dart';
 import '../widgets/tag_badge.dart';
 import 'auth_screen.dart';
+import 'game_screens/digit_dash_screen.dart';
+import 'game_screens/neon_perimeter_screen.dart';
+import 'game_screens/neon_rise_screen.dart';
+import 'game_screens/velocity_vector_screen.dart';
 
 class WebLandingScreen extends StatefulWidget {
   const WebLandingScreen({super.key});
@@ -31,6 +35,37 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
   final _accessKey = GlobalKey();
   final _scrollCtrl = ScrollController();
 
+  static const List<_GamePreview> _soloGames = [
+    _GamePreview(
+      title: 'Neon Rise',
+      tagline: 'Market direction.',
+      imagePath: 'assets/images/neon_rise_bg.png',
+      demoPlayable: true,
+      gameScreen: NeonRiseScreen(),
+    ),
+    _GamePreview(
+      title: 'Digit Dash',
+      tagline: 'Last digit.',
+      imagePath: 'assets/images/digit_dash_bg.png',
+      demoPlayable: true,
+      gameScreen: DigitDashScreen(),
+    ),
+    _GamePreview(
+      title: 'Neon Perimeter',
+      tagline: 'Boundary break.',
+      imagePath: 'assets/images/neon_perimeter_bg.png',
+      demoPlayable: true,
+      gameScreen: NeonPerimeterScreen(),
+    ),
+    _GamePreview(
+      title: 'Velocity Vector',
+      tagline: 'Momentum.',
+      imagePath: 'assets/images/velocity_vector_bg.png',
+      demoPlayable: true,
+      gameScreen: VelocityVectorScreen(),
+    ),
+  ];
+
   @override
   void dispose() {
     _scrollCtrl.dispose();
@@ -48,19 +83,19 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
           if (wideNav) ...[
             TextButton(
               onPressed: () => _scrollTo(_gamesKey),
-              child: const Text('Games'),
+              child: Text('Games'),
             ),
             TextButton(
               onPressed: () => _scrollTo(_featuresKey),
-              child: const Text('Features'),
+              child: Text('Features'),
             ),
             TextButton(
               onPressed: () => _openExternal(_iosUrl),
-              child: const Text('iOS'),
+              child: Text('iOS'),
             ),
             TextButton(
               onPressed: () => _openExternal(_androidUrl),
-              child: const Text('Android'),
+              child: Text('Android'),
             ),
           ],
           Padding(
@@ -122,10 +157,10 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const TagBadge(label: 'WEB + MOBILE'),
+              const TagBadge(label: 'GUEST'),
               SizedBox(height: context.space.md),
               Text(
-                'Play. Predict. Settle.',
+                'Play the next round instantly.',
                 style: context.type.heroTitle.copyWith(
                   fontSize: wide ? 48 : 34,
                   color: context.colors.textPrimary,
@@ -135,7 +170,7 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
               ),
               SizedBox(height: context.space.sm),
               Text(
-                'Fast rounds, 2-4 player rooms, live wallet.',
+                'Solo demos are playable now. Live lobbies are unlocked with guest access or SSO.',
                 style: context.type.bodyStrong.copyWith(
                   color: context.colors.textSecondary,
                   height: 1.45,
@@ -147,22 +182,13 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
                 runSpacing: context.space.sm,
                 children: [
                   PrimaryButton(
-                    label: 'Play',
+                    label: 'Play demo',
+                    onPressed: () => _launchFirstDemo(context),
+                  ),
+                  SecondaryButton(
+                    label: 'Join lobby',
                     onPressed: () => _openAuth(context),
-                  ),
-                  _heroPlatformButton(
-                    context,
-                    icon: Icons.apple,
-                    title: 'iOS app',
-                    subtitle: 'App Store',
-                    onTap: () => _openExternal(_iosUrl),
-                  ),
-                  _heroPlatformButton(
-                    context,
-                    icon: Icons.android,
-                    title: 'Android app',
-                    subtitle: 'Play Store',
-                    onTap: () => _openExternal(_androidUrl),
+                    expanded: false,
                   ),
                 ],
               ),
@@ -171,9 +197,9 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
                 spacing: context.space.xs,
                 runSpacing: context.space.xs,
                 children: const [
-                  _HeroChip(label: 'Guest'),
-                  _HeroChip(label: '15+ games'),
-                  _HeroChip(label: '2-4 rooms'),
+                  _HeroChip(label: 'Demo first'),
+                  _HeroChip(label: 'Guest entry'),
+                  _HeroChip(label: 'Live wallet'),
                 ],
               ),
             ],
@@ -344,53 +370,6 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
     );
   }
 
-  Widget _heroPlatformButton(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(context.radii.lg),
-        onTap: onTap,
-        child: Ink(
-          padding: EdgeInsets.symmetric(
-            horizontal: context.space.md,
-            vertical: context.space.sm,
-          ),
-          decoration: BoxDecoration(
-            color: context.colors.bgCard,
-            borderRadius: BorderRadius.circular(context.radii.lg),
-            border: Border.all(color: context.colors.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: context.colors.textPrimary),
-              SizedBox(width: context.space.xs),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title, style: context.type.bodyStrong),
-                  Text(
-                    subtitle,
-                    style: context.type.label.copyWith(
-                      color: context.colors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildStatsStrip(BuildContext context) {
     final cards = [
       _statTile(context, value: '15+', label: 'Games'),
@@ -472,37 +451,24 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionHeader(title: 'Games'),
+        SizedBox(height: context.space.sm),
+        Text(
+          'Play solo demos instantly. Live lobby titles shown below require guest access or SSO to enter.',
+          style: context.type.body.copyWith(
+            color: context.colors.textSecondary,
+            height: 1.5,
+          ),
+        ),
         SizedBox(height: context.space.md),
         _buildGameCategoryRow(
           context,
-          label: 'SOLO',
-          games: const [
-            _GamePreview(
-              title: 'Neon Rise',
-              tagline: 'Market direction.',
-              imagePath: 'assets/images/neon_rise_bg.png',
-            ),
-            _GamePreview(
-              title: 'Digit Dash',
-              tagline: 'Last digit.',
-              imagePath: 'assets/images/digit_dash_bg.png',
-            ),
-            _GamePreview(
-              title: 'Neon Perimeter',
-              tagline: 'Boundary break.',
-              imagePath: 'assets/images/neon_perimeter_bg.png',
-            ),
-            _GamePreview(
-              title: 'Velocity Vector',
-              tagline: 'Momentum.',
-              imagePath: 'assets/images/velocity_vector_bg.png',
-            ),
-          ],
+          label: 'SOLO DEMOS',
+          games: _soloGames,
         ),
         SizedBox(height: context.space.lg),
         _buildGameCategoryRow(
           context,
-          label: 'MULTIPLAYER',
+          label: 'LOBBY GAMES',
           games: const [
             _GamePreview(
               title: 'Target Strike',
@@ -529,10 +495,12 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
         SizedBox(height: context.space.lg),
         Center(
           child: PrimaryButton(
-            label: 'Open Lobby',
+            label: 'Open lobby',
             onPressed: () => _openAuth(context),
           ),
         ),
+        SizedBox(height: context.space.lg),
+        _buildLiveFeedSection(context),
       ],
     );
   }
@@ -624,6 +592,15 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
               ),
             ),
             Positioned(
+              top: context.space.sm,
+              left: context.space.sm,
+              child: TagBadge(
+                label: game.demoPlayable ? 'DEMO' : 'LOBBY',
+                backgroundColor: AppTheme.backgroundDark,
+                foregroundColor: AppTheme.primaryColor,
+              ),
+            ),
+            Positioned(
               left: context.space.sm,
               right: context.space.sm,
               bottom: context.space.sm,
@@ -645,12 +622,96 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
                       height: 1.3,
                     ),
                   ),
+                  SizedBox(height: context.space.sm),
+                  if (game.demoPlayable)
+                    PrimaryButton(
+                      expanded: true,
+                      label: 'Play demo',
+                      onPressed: () => _launchGame(context, game),
+                    )
+                  else
+                    SecondaryButton(
+                      expanded: true,
+                      label: 'Sign in',
+                      onPressed: () => _openAuth(context),
+                    ),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLiveFeedSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Live feed'),
+        SizedBox(height: context.space.sm),
+        SurfaceCard(
+          padding: EdgeInsets.all(context.space.md),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Latest outcomes',
+                    style: context.type.bodyStrong.copyWith(
+                      color: context.colors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    'Updated now',
+                    style: context.type.label.copyWith(
+                      color: context.colors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: context.space.md),
+              Column(
+                children: [
+                  _feedRow(context, 'Neon Rise', '+3.2%', 'WIN'),
+                  SizedBox(height: context.space.sm),
+                  _feedRow(context, 'Parity Clash', '-1.8%', 'LOSS'),
+                  SizedBox(height: context.space.sm),
+                  _feedRow(context, 'Target Strike', '+2.5%', 'WIN'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _feedRow(BuildContext context, String game, String result, String status) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            game,
+            style: context.type.bodyStrong.copyWith(
+              color: context.colors.textPrimary,
+            ),
+          ),
+        ),
+        Text(
+          result,
+          style: context.type.bodyStrong.copyWith(
+            color: status == 'WIN' ? AppTheme.primaryColor : context.colors.textSecondary,
+          ),
+        ),
+        SizedBox(width: context.space.sm),
+        TagBadge(
+          label: status,
+          backgroundColor: context.colors.bgSurface,
+          foregroundColor: status == 'WIN' ? AppTheme.primaryColor : context.colors.textSecondary,
+        ),
+      ],
     );
   }
 
@@ -887,6 +948,25 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
     ).push(MaterialPageRoute(builder: (_) => const AuthScreen()));
   }
 
+  void _launchGame(BuildContext context, _GamePreview game) {
+    if (!game.demoPlayable || game.gameScreen == null) {
+      _openAuth(context);
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => game.gameScreen!),
+    );
+  }
+
+  void _launchFirstDemo(BuildContext context) {
+    final demoGame = _soloGames.firstWhere(
+      (game) => game.demoPlayable,
+      orElse: () => _soloGames.first,
+    );
+    _launchGame(context, demoGame);
+  }
+
   Future<void> _openExternal(String url) async {
     final uri = Uri.parse(url);
     final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -916,11 +996,15 @@ class _GamePreview {
     required this.title,
     required this.tagline,
     required this.imagePath,
+    this.demoPlayable = false,
+    this.gameScreen,
   });
 
   final String title;
   final String tagline;
   final String imagePath;
+  final bool demoPlayable;
+  final Widget? gameScreen;
 }
 
 class _HeroChip extends StatelessWidget {
@@ -938,11 +1022,11 @@ class _HeroChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: dark
-            ? Colors.black.withValues(alpha: 0.58)
-            : AppTheme.gameSurface,
+            ? AppTheme.backgroundDark.withValues(alpha: 0.4)
+            : AppTheme.bgCard,
         borderRadius: BorderRadius.circular(context.radii.pill),
         border: Border.all(
-          color: AppTheme.goldButtonBottom.withValues(
+          color: AppTheme.borderDark.withValues(
             alpha: dark ? 0.42 : 0.32,
           ),
         ),

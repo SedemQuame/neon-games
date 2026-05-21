@@ -34,10 +34,10 @@ class _PrimaryButtonState extends State<PrimaryButton> {
       scale: _pressed && enabled ? 0.985 : 1,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: enabled ? AppTheme.primaryColor : AppTheme.goldDisabledBottom,
+          color: enabled ? AppTheme.goldButtonTop : AppTheme.goldDisabledBottom,
           borderRadius: radius,
           border: Border.all(
-            color: enabled ? AppTheme.primaryColor : AppTheme.gameBorder,
+            color: enabled ? AppTheme.goldButtonBottom : AppTheme.gameBorder,
           ),
         ),
         child: Material(
@@ -139,9 +139,9 @@ class _SecondaryButtonState extends State<SecondaryButton> {
             onPressed: widget.onPressed,
             style: OutlinedButton.styleFrom(
               minimumSize: Size(widget.expanded ? double.infinity : 0, 44),
-              backgroundColor: context.colors.bgCard,
+              backgroundColor: context.colors.bgSurface,
               foregroundColor: context.colors.textPrimary,
-              side: BorderSide(color: context.colors.border),
+              side: BorderSide(color: AppTheme.borderDark.withValues(alpha: 0.7)),
               padding: EdgeInsets.symmetric(
                 horizontal: context.space.lg,
                 vertical: context.space.sm,
@@ -155,9 +155,9 @@ class _SecondaryButtonState extends State<SecondaryButton> {
             label: Text(widget.label),
             style: OutlinedButton.styleFrom(
               minimumSize: Size(widget.expanded ? double.infinity : 0, 44),
-              backgroundColor: context.colors.bgCard,
+              backgroundColor: context.colors.bgSurface,
               foregroundColor: context.colors.textPrimary,
-              side: BorderSide(color: context.colors.border),
+              side: BorderSide(color: AppTheme.borderDark.withValues(alpha: 0.7)),
               padding: EdgeInsets.symmetric(
                 horizontal: context.space.lg,
                 vertical: context.space.sm,

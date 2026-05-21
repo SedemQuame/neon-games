@@ -17,7 +17,7 @@ class TagBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final useDefaultGold = backgroundColor == null && foregroundColor == null;
-    final bg = backgroundColor ?? AppTheme.gameSurface;
+    final bg = backgroundColor ?? AppTheme.bgSurface;
     final fg = foregroundColor ?? AppTheme.primaryColor;
 
     return Container(

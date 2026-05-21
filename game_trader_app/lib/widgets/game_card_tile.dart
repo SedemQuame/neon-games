@@ -15,6 +15,7 @@ class GameCardTile extends StatefulWidget {
     this.minStake,
     this.highlighted = false,
     this.compact = false,
+    this.aspectRatio,
   });
 
   final String title;
@@ -25,6 +26,7 @@ class GameCardTile extends StatefulWidget {
   final num? minStake;
   final bool highlighted;
   final bool compact;
+  final double? aspectRatio;
 
   @override
   State<GameCardTile> createState() => _GameCardTileState();
@@ -32,6 +34,7 @@ class GameCardTile extends StatefulWidget {
 
 class _GameCardTileState extends State<GameCardTile> {
   bool _pressed = false;
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
@@ -41,26 +44,34 @@ class _GameCardTileState extends State<GameCardTile> {
         : colors.border;
     final cardShadows = context.elevation.card;
 
-    return AnimatedScale(
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
-      scale: _pressed ? 0.985 : 1,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(context.radii.lg),
-          onTap: widget.onTap,
-          onHighlightChanged: (value) => setState(() => _pressed = value),
-          child: Ink(
-            decoration: BoxDecoration(
-              color: colors.bgCard,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          scale: _pressed ? 0.985 : 1,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
               borderRadius: BorderRadius.circular(context.radii.lg),
-              border: Border.all(color: highlightBorder),
-              boxShadow: cardShadows,
+              onTap: widget.onTap,
+              onHighlightChanged: (value) => setState(() => _pressed = value),
+              child: Ink(
+                decoration: BoxDecoration(
+                  color: colors.bgCard,
+                  borderRadius: BorderRadius.circular(context.radii.lg),
+                  border: Border.all(color: highlightBorder),
+                  boxShadow: cardShadows,
+                ),
+                child: widget.compact
+                    ? _CompactGameCardContent(widget: widget, isHovered: _hovered)
+                    : _StackedGameCardContent(widget: widget, isHovered: _hovered),
+              ),
             ),
-            child: widget.compact
-                ? _CompactGameCardContent(widget: widget)
-                : _StackedGameCardContent(widget: widget),
           ),
         ),
       ),
@@ -69,9 +80,10 @@ class _GameCardTileState extends State<GameCardTile> {
 }
 
 class _StackedGameCardContent extends StatelessWidget {
-  const _StackedGameCardContent({required this.widget});
+  const _StackedGameCardContent({required this.widget, required this.isHovered});
 
   final GameCardTile widget;
+  final bool isHovered;
 
   @override
   Widget build(BuildContext context) {
@@ -85,8 +97,8 @@ class _StackedGameCardContent extends StatelessWidget {
             top: Radius.circular(context.radii.lg),
           ),
           child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: _GameImageStack(widget: widget, showTag: true),
+            aspectRatio: widget.aspectRatio ?? (3 / 4),
+            child: _GameImageStack(widget: widget, showTag: true, isHovered: isHovered),
           ),
         ),
         Padding(
@@ -96,19 +108,45 @@ class _StackedGameCardContent extends StatelessWidget {
             children: [
               Text(
                 widget.title,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: context.type.bodyStrong.copyWith(
-                  color: colors.textPrimary,
-                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
                 ),
               ),
-              SizedBox(height: context.space.xxs),
-              Text(
-                widget.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: context.type.body.copyWith(color: colors.textSecondary),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.type.label.copyWith(
+                        color: colors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.success,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '10k+',
+                    style: context.type.label.copyWith(
+                      color: colors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
               ),
               if (widget.minStake != null) ...[
                 SizedBox(height: context.space.sm),
@@ -123,9 +161,10 @@ class _StackedGameCardContent extends StatelessWidget {
 }
 
 class _CompactGameCardContent extends StatelessWidget {
-  const _CompactGameCardContent({required this.widget});
+  const _CompactGameCardContent({required this.widget, required this.isHovered});
 
   final GameCardTile widget;
+  final bool isHovered;
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +179,7 @@ class _CompactGameCardContent extends StatelessWidget {
           child: SizedBox(
             width: 104,
             height: double.infinity,
-            child: _GameImageStack(widget: widget, showTag: false),
+            child: _GameImageStack(widget: widget, showTag: false, isHovered: isHovered),
           ),
         ),
         Expanded(
@@ -195,10 +234,15 @@ class _CompactGameCardContent extends StatelessWidget {
 }
 
 class _GameImageStack extends StatelessWidget {
-  const _GameImageStack({required this.widget, required this.showTag});
+  const _GameImageStack({
+    required this.widget,
+    required this.showTag,
+    required this.isHovered,
+  });
 
   final GameCardTile widget;
   final bool showTag;
+  final bool isHovered;
 
   @override
   Widget build(BuildContext context) {
@@ -208,18 +252,21 @@ class _GameImageStack extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         Image.asset(widget.imagePath, fit: BoxFit.cover),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.bottomCenter,
-              end: Alignment.topCenter,
-              colors: [
-                Colors.black.withValues(alpha: widget.highlighted ? 0.56 : 0.4),
-                Colors.transparent,
-              ],
-            ),
-          ),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          color: Colors.black.withValues(alpha: isHovered ? 0.4 : 0.0),
         ),
+        if (isHovered)
+          Center(
+             child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.primaryColor,
+                ),
+                child: const Icon(Icons.play_arrow, color: AppTheme.goldText),
+             ),
+           ),
         if (widget.highlighted && showTag)
           Positioned(
             right: context.space.xs,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import 'sidebar_nav.dart';
 
 class CasinoScaffold extends StatelessWidget {
   const CasinoScaffold({
@@ -48,14 +49,24 @@ class CasinoScaffold extends StatelessWidget {
               child: body,
             );
 
-            if (!constrainBody) {
-              return content;
+            final mainBody = !constrainBody
+                ? content
+                : Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(width: contentWidth, child: content),
+                  );
+            
+            if (constraints.maxWidth >= 1040) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SidebarNav(),
+                  Expanded(child: mainBody),
+                ],
+              );
             }
 
-            return Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(width: contentWidth, child: content),
-            );
+            return mainBody;
           },
         ),
       ),

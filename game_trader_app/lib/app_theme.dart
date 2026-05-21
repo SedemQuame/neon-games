@@ -149,18 +149,18 @@ class AppTypographyTokens {
 
 class AppTheme {
   static const AppColorTokens _tokens = AppColorTokens(
-    bgApp: Color(0xFF0B0E11),
-    bgSurface: Color(0xFF1E2329),
-    bgCard: Color(0xFF1E2329),
+    bgApp: Color(0xFF0F212E),
+    bgSurface: Color(0xFF1A2C38),
+    bgCard: Color(0xFF1A2C38),
     textPrimary: Color(0xFFEAECEF),
-    textSecondary: Color(0xFF929AA5),
-    primary: Color(0xFFFCD535),
-    success: Color(0xFF0ECB81),
+    textSecondary: Color(0xFFB1BAD3),
+    primary: Color(0xFF00E701),
+    success: Color(0xFF00E701),
     warning: Color(0xFFFCD535),
     danger: Color(0xFFF6465D),
-    navBackground: Color(0xFF0B0E11),
+    navBackground: Color(0xFF0F212E),
     navForeground: Color(0xFFEAECEF),
-    border: Color(0xFF2B3139),
+    border: Color(0xFF223349),
   );
 
   static const AppSpacingTokens spacing = AppSpacingTokens();
@@ -168,27 +168,28 @@ class AppTheme {
   static const AppShadowTokens shadows = AppShadowTokens();
   static const AppTypographyTokens typography = AppTypographyTokens();
 
-  static const primaryColor = Color(0xFFFCD535);
-  static const primarySoft = Color(0xFFF0B90B);
-  static const rewardGold = Color(0xFFFCD535);
-  static const goldButtonTop = Color(0xFFFCD535);
-  static const goldButtonBottom = Color(0xFFF0B90B);
-  static const goldText = Color(0xFF181A20);
-  static const goldDisabledTop = Color(0xFF3A3A1F);
-  static const goldDisabledBottom = Color(0xFF3A3A1F);
-  static const backgroundLight = Color(0xFF1E2329);
-  static const backgroundDark = Color(0xFF0B0E11);
-  static const surfaceDark = Color(0xFF1E2329);
-  static const borderDark = Color(0xFF2B3139);
-  static const gameBackground = Color(0xFF0B0E11);
-  static const gameSurface = Color(0xFF1E2329);
-  static const gameBorder = Color(0xFF2B3139);
+  static const primaryColor = Color(0xFFF7B500);
+  static const primarySoft = Color(0xFFFFD367);
+  static const rewardGold = Color(0xFFF7B500);
+  static const goldButtonTop = Color(0xFFF7B500);
+  static const goldButtonBottom = Color(0xFFE0A300);
+  static const goldText = Color(0xFF11100A);
+  static const goldDisabledTop = Color(0xFF5F5324);
+  static const goldDisabledBottom = Color(0xFF4B431A);
+  static const backgroundLight = Color(0xFF0E1822);
+  static const bgSurface = Color(0xFF131F2C);
+  static const backgroundDark = Color(0xFF071018);
+  static const surfaceDark = Color(0xFF152636);
+  static const borderDark = Color(0xFF223349);
+  static const gameBackground = Color(0xFF0F212E);
+  static const gameSurface = Color(0xFF1A2C38);
+  static const gameBorder = Color(0xFF223349);
   static const textPrimary = Color(0xFFEAECEF);
-  static const textSecondary = Color(0xFF929AA5);
-  static const bgCard = Color(0xFF1E2329);
-  static const navBackground = Color(0xFF0B0E11);
+  static const textSecondary = Color(0xFFB1BAD3);
+  static const bgCard = Color(0xFF1A2C38);
+  static const navBackground = Color(0xFF0F212E);
   static const navForeground = Color(0xFFEAECEF);
-  static const success = Color(0xFF0ECB81);
+  static const success = Color(0xFF00E701);
   static const warning = Color(0xFFFCD535);
   static const danger = Color(0xFFF6465D);
 
