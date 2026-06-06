@@ -75,20 +75,6 @@ class _SpinBottleScreenState extends State<SpinBottleScreen> {
         showGameMessage(context, 'Insufficient demo balance.');
         return;
       }
-      showGameMessage(context, 'Demo spin. Wallet unchanged.');
-      await Future<void>.delayed(const Duration(milliseconds: 1400));
-      if (!mounted) return;
-      final demoRes = buildDemoGameResult(
-        gameType: 'SPIN_BOTTLE',
-        stakeUsd: _stakeUsd,
-        payoutMultiplier: 1.85,
-        winChance: 0.48,
-      );
-      if (demoRes.winAmountUsd > 0) {
-        context.read<SessionManager>().addDemoWinnings(demoRes.winAmountUsd);
-      }
-      _handleGameResult(demoRes);
-      return;
     }
 
     final targetSide = _randomOutcome();
@@ -123,6 +109,10 @@ class _SpinBottleScreenState extends State<SpinBottleScreen> {
             ? 'You won ${formatCurrency(userNet.abs())} from the pot.'
             : 'You lost this pot round.';
       });
+      
+      if (_playMode.isDemo && outcome.userPayout > 0) {
+        context.read<SessionManager>().addDemoWinnings(outcome.userPayout);
+      }
 
       showGameMessage(
         context,
@@ -149,6 +139,10 @@ class _SpinBottleScreenState extends State<SpinBottleScreen> {
             ? 'You won ${formatCurrency(net.abs())}.'
             : 'Round lost. Try again.';
       });
+      
+      if (_playMode.isDemo && payout > 0) {
+        context.read<SessionManager>().addDemoWinnings(payout);
+      }
 
       showGameMessage(
         context,

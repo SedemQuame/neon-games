@@ -211,23 +211,22 @@ class _AviatorBoomCrashScreenState extends State<AviatorBoomCrashScreen>
     if (!mounted) return;
     final payoutUsd = win ? stakeAmount * multiplier : 0.0;
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    onGameResult(
-      GameResultEvent(
-        sessionId: 'demo-$id',
-        userId: 'demo',
-        gameType: 'AVIATOR_BOOM_CRASH',
-        outcome: win ? 'WIN' : 'LOSS',
-        payoutUsd: payoutUsd,
-        winAmountUsd: win ? math.max(0.0, payoutUsd - stakeAmount) : 0.0,
-        stakeUsd: stakeAmount,
-        newBalance: 0,
-        traceId: 'demo-$id',
-        derivContractId: win ? 'DEMO_LANDED' : 'DEMO_CRASH',
-      );
-      if (win) {
-        context.read<SessionManager>().addDemoWinnings(result.winAmountUsd);
-      }
-      onGameResult(result);
+    final result = GameResultEvent(
+      sessionId: 'demo-$id',
+      userId: 'demo',
+      gameType: 'AVIATOR_BOOM_CRASH',
+      outcome: win ? 'WIN' : 'LOSS',
+      payoutUsd: payoutUsd,
+      winAmountUsd: win ? math.max(0.0, payoutUsd - stakeAmount) : 0.0,
+      stakeUsd: stakeAmount,
+      newBalance: 0,
+      traceId: 'demo-$id',
+      derivContractId: win ? 'DEMO_LANDED' : 'DEMO_CRASH',
+    );
+    if (win) {
+      context.read<SessionManager>().addDemoWinnings(result.winAmountUsd);
+    }
+    onGameResult(result);
   }
 
   void _startFlightTicker() {

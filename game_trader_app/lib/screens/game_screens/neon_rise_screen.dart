@@ -510,11 +510,6 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
         showGameMessage(context, 'Insufficient demo balance.');
         return;
       }
-      final session = context.read<SessionManager>();
-      if (!session.deductDemoBalance(stakeAmount)) {
-        showGameMessage(context, 'Insufficient demo balance.');
-        return;
-      }
       setState(() => _statusMessage = 'Demo signal running...');
       showGameMessage(context, 'Demo signal. Wallet unchanged.');
       

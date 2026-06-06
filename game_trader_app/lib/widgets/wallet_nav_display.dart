@@ -27,7 +27,7 @@ class WalletNavDisplay extends StatelessWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: context.colors.primary,
-              foregroundColor: context.colors.onPrimary,
+              foregroundColor: AppTheme.backgroundDark,
             ),
             onPressed: () {
               session.refillDemoWallet(1000.0);
