@@ -105,25 +105,38 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
         title: 'Glory Grid',
         actions: [
           if (wideNav) ...[
-            TextButton(
-              onPressed: () => _scrollTo(_gamesKey),
-              child: Text('Games'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: TextButton(
+                onPressed: () => _scrollTo(_gamesKey),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.textSecondary,
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                child: const Text('Games'),
+              ),
             ),
-            TextButton(
-              onPressed: () => _scrollTo(_featuresKey),
-              child: Text('Features'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: TextButton(
+                onPressed: () => _scrollTo(_featuresKey),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppTheme.textSecondary,
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                child: const Text('Features'),
+              ),
             ),
-            TextButton(
-              onPressed: () => _openExternal(_iosUrl),
-              child: Text('iOS'),
-            ),
-            TextButton(
-              onPressed: () => _openExternal(_androidUrl),
-              child: Text('Android'),
-            ),
+            const SizedBox(width: 16),
           ],
           Padding(
-            padding: EdgeInsets.only(right: context.space.sm),
+            padding: EdgeInsets.only(right: context.space.md),
             child: PrimaryButton(
               label: 'Play Now',
               onPressed: () => _openAuth(context),

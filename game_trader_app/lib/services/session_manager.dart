@@ -80,8 +80,8 @@ class SessionManager extends ChangeNotifier {
     await _openSession(session, suppressBalanceErrors: true);
   }
 
-  Future<void> startGuestMode() async {
-    final idToken = await _firebaseAuth.signInAnonymously();
+  Future<void> startGuestMode({String? displayName}) async {
+    final idToken = await _firebaseAuth.signInAnonymously(displayName: displayName);
     final session = await _auth.loginWithFirebaseIdToken(idToken: idToken);
     await _openSession(session, suppressBalanceErrors: true);
   }

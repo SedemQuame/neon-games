@@ -1,23 +1,61 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 class FirebaseAuthService {
-  FirebaseAuthService() : _auth = FirebaseAuth.instance;
+  FirebaseAuthService() : _auth = FirebaseAuth.instance {
+    if (!kIsWeb) {
+      GoogleSignIn.instance.initialize();
+    }
+  }
 
   final FirebaseAuth _auth;
 
-  Future<String> signInWithGoogle() {
-    final provider = GoogleAuthProvider()
-      ..addScope('email')
-      ..setCustomParameters({'prompt': 'select_account'});
-    return _signInWithProvider(provider);
+  Future<String> signInWithGoogle() async {
+    if (kIsWeb) {
+      final provider = GoogleAuthProvider()
+        ..addScope('email')
+        ..setCustomParameters({'prompt': 'select_account'});
+      return _signInWithProvider(provider);
+    } else {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance.authenticate();
+      if (googleUser == null) {
+        throw StateError('Google Sign-In cancelled by user.');
+      }
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      return _extractIdToken(userCredential);
+    }
   }
 
-  Future<String> signInWithApple() {
-    final provider = OAuthProvider('apple.com')
-      ..addScope('email')
-      ..addScope('name');
-    return _signInWithProvider(provider);
+  Future<String> signInWithApple() async {
+    if (kIsWeb) {
+      final provider = OAuthProvider('apple.com')
+        ..addScope('email')
+        ..addScope('name');
+      return _signInWithProvider(provider);
+    } else {
+      final AuthorizationCredentialAppleID appleCredential =
+          await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final OAuthProvider provider = OAuthProvider('apple.com');
+      final AuthCredential credential = provider.credential(
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
+
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      return _extractIdToken(userCredential);
+    }
   }
 
   Future<String> signInWithX() {
@@ -25,12 +63,19 @@ class FirebaseAuthService {
     return _signInWithProvider(provider);
   }
 
-  Future<String> signInAnonymously() async {
+  Future<String> signInAnonymously({String? displayName}) async {
     final credential = await _auth.signInAnonymously();
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      await credential.user?.updateDisplayName(displayName.trim());
+      await credential.user?.reload();
+    }
     return _extractIdToken(credential);
   }
 
-  Future<void> signOut() {
+  Future<void> signOut() async {
+    if (!kIsWeb) {
+      await GoogleSignIn.instance.signOut();
+    }
     return _auth.signOut();
   }
 

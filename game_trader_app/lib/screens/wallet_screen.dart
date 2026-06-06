@@ -92,6 +92,7 @@ class _WalletScreenState extends State<WalletScreen> {
     final balance = _balance ?? sessionBalance;
 
     return CasinoScaffold(
+      useNarrowLayout: true,
       appBar: const CasinoTopNav(title: 'Wallet'),
       bottomNavigationBar: const SharedBottomNav(currentIndex: 2),
       body: RefreshIndicator(
@@ -226,19 +227,6 @@ class _WalletScreenState extends State<WalletScreen> {
             scrollDirection: Axis.horizontal,
             children: [
               _paymentMethodCard(
-                icon: Icons.phone_android_rounded,
-                title: 'Mobile Money',
-                subtitle: 'MTN, Vodafone',
-                color: context.colors.primary,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const DepositScreen()),
-                  );
-                },
-              ),
-              SizedBox(width: context.space.sm),
-              _paymentMethodCard(
                 icon: Icons.currency_bitcoin_rounded,
                 title: 'Crypto',
                 subtitle: 'BTC, ETH, USDT',
@@ -248,6 +236,20 @@ class _WalletScreenState extends State<WalletScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const CryptoDepositScreen(),
+                    ),
+                  );
+                },
+              ),
+              SizedBox(width: context.space.sm),
+              _paymentMethodCard(
+                icon: Icons.phone_android_rounded,
+                title: 'Mobile Money',
+                subtitle: 'Coming soon',
+                color: context.colors.primary,
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Mobile Money deposits are coming soon.'),
                     ),
                   );
                 },

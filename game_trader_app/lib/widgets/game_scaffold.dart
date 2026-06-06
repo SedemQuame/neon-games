@@ -22,8 +22,8 @@ class GameScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
-    // 40% on desktop, 90% on mobile/tablet
-    final effectiveMaxWidth = isDesktop ? screenWidth * 0.4 : screenWidth * 0.9;
+    // 60% on desktop, 90% on mobile/tablet
+    final effectiveMaxWidth = isDesktop ? screenWidth * 0.6 : screenWidth * 0.9;
 
     return Scaffold(
       backgroundColor: backgroundColor,

@@ -71,7 +71,7 @@ class _MultiplayerArenaScreenState extends State<MultiplayerArenaScreen> {
   bool _recoveringRoomConnection = false;
   _RoomStakeFilter _roomStakeFilter = _RoomStakeFilter.any;
   _RoomLobbyPanel _roomLobbyPanel = _RoomLobbyPanel.controls;
-  PlayMode _playMode = PlayMode.demo;
+  PlayMode _playMode = PlayMode.real;
   int _minPlayers = 2;
   int _maxPlayers = 4;
   double _stakeUsd = 1;
@@ -1661,7 +1661,6 @@ class _MultiplayerArenaScreenState extends State<MultiplayerArenaScreen> {
     return GameScaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: GameActivityAppBar(title: _selected.title),
-      bottomNavigationBar: _room == null ? _buildBottomPlayModeBar() : null,
       body: SafeArea(
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),

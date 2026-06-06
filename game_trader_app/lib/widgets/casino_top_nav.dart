@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../app_theme.dart';
 
@@ -20,9 +22,20 @@ class CasinoTopNav extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onBack;
   final bool showBackButton;
 
+  Future<void> _openExternal(String url) async {
+    try {
+      if (!await launchUrl(Uri.parse(url))) {
+        debugPrint('Could not launch $url');
+      }
+    } catch (e) {
+      debugPrint('Error launching url: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppBar(
+      toolbarHeight: 72,
       backgroundColor: AppTheme.navBackground,
       foregroundColor: AppTheme.navForeground,
       titleSpacing: context.space.md,
@@ -32,8 +45,9 @@ class CasinoTopNav extends StatelessWidget implements PreferredSizeWidget {
               title!,
               style: const TextStyle(
                 color: AppTheme.navForeground,
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
               ),
             ),
       centerTitle: centerTitle,
@@ -58,5 +72,5 @@ class CasinoTopNav extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(72);
 }

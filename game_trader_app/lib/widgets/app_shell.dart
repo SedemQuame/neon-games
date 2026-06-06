@@ -13,6 +13,7 @@ class CasinoScaffold extends StatelessWidget {
     this.bodyPadding,
     this.constrainBody = true,
     this.resizeToAvoidBottomInset,
+    this.useNarrowLayout = false,
   });
 
   final PreferredSizeWidget? appBar;
@@ -23,13 +24,13 @@ class CasinoScaffold extends StatelessWidget {
   final EdgeInsetsGeometry? bodyPadding;
   final bool constrainBody;
   final bool? resizeToAvoidBottomInset;
+  final bool useNarrowLayout;
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
-    final effectiveMaxWidth = isDesktop ? screenWidth * 0.4 : screenWidth * 0.9;
-
+    
     return Scaffold(
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       backgroundColor: context.colors.bgApp,
@@ -39,24 +40,42 @@ class CasinoScaffold extends StatelessWidget {
           ? Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: effectiveMaxWidth,
-                  child: bottomNavigationBar,
-                ),
+                useNarrowLayout 
+                    ? SizedBox(
+                        width: isDesktop ? screenWidth * 0.6 : screenWidth * 0.9,
+                        child: bottomNavigationBar,
+                      )
+                    : Expanded(child: bottomNavigationBar!),
               ],
             )
           : null,
       body: DecoratedBox(
         decoration: const BoxDecoration(color: AppTheme.backgroundDark),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            width: effectiveMaxWidth,
-            child: Padding(
-              padding: bodyPadding ?? EdgeInsets.symmetric(horizontal: AppTheme.spacing.md),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontal = _responsiveHorizontalPadding(constraints.maxWidth);
+            
+            double contentWidth;
+            if (useNarrowLayout) {
+              contentWidth = isDesktop ? screenWidth * 0.6 : screenWidth * 0.9;
+            } else {
+              contentWidth = constraints.maxWidth > maxContentWidth
+                  ? maxContentWidth
+                  : constraints.maxWidth;
+            }
+
+            final content = Padding(
+              padding: bodyPadding ?? EdgeInsets.symmetric(horizontal: useNarrowLayout ? AppTheme.spacing.md : horizontal),
               child: body,
-            ),
-          ),
+            );
+
+            return !constrainBody
+                ? content
+                : Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(width: contentWidth, child: content),
+                  );
+          },
         ),
       ),
     );

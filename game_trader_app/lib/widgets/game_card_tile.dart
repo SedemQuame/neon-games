@@ -86,63 +86,76 @@ class _GameCardTileState extends State<GameCardTile> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
-              child: AnimatedScale(
-                duration: const Duration(milliseconds: 120),
-                curve: Curves.easeOut,
-                scale: _pressed ? 0.985 : 1,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(context.radii.lg),
-                    onTap: widget.onTap,
-                    onHighlightChanged: (value) => setState(() => _pressed = value),
-                    child: Ink(
-                      decoration: BoxDecoration(
-                        color: colors.bgCard,
-                        borderRadius: BorderRadius.circular(context.radii.lg),
-                        border: Border.all(color: highlightBorder),
-                        boxShadow: cardShadows,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(context.radii.lg),
-                        child: _GameImageStack(widget: widget, showTag: true, isHovered: _hovered),
-                      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          Widget imageContent = AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 120),
+              curve: Curves.easeOut,
+              scale: _pressed ? 0.985 : 1,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(context.radii.lg),
+                  onTap: widget.onTap,
+                  onHighlightChanged: (value) => setState(() => _pressed = value),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      color: colors.bgCard,
+                      borderRadius: BorderRadius.circular(context.radii.lg),
+                      border: Border.all(color: highlightBorder),
+                      boxShadow: cardShadows,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(context.radii.lg),
+                      child: _GameImageStack(widget: widget, showTag: true, isHovered: _hovered),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
+          );
+
+          if (!constraints.hasBoundedHeight) {
+            imageContent = AspectRatio(
+              aspectRatio: widget.aspectRatio ?? 0.75,
+              child: imageContent,
+            );
+          } else {
+            imageContent = Expanded(child: imageContent);
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.success,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                '${widget.playersCount} playing',
-                style: context.type.label.copyWith(
-                  color: colors.textSecondary,
-                  fontSize: 12,
-                ),
+              imageContent,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.success,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${widget.playersCount} playing',
+                    style: context.type.label.copyWith(
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }

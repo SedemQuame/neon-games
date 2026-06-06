@@ -22,7 +22,7 @@ class _DepositScreenState extends State<DepositScreen> {
   final TextEditingController _amountController = TextEditingController(
     text: '100.00',
   );
-  _DepositMethod _selected = _DepositMethod.mobileMoney;
+  _DepositMethod _selected = _DepositMethod.crypto;
 
   @override
   void dispose() {
@@ -37,9 +37,8 @@ class _DepositScreenState extends State<DepositScreen> {
   void _continue() {
     switch (_selected) {
       case _DepositMethod.mobileMoney:
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MobileMoneyDepositScreen()),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mobile Money deposits are coming soon.')),
         );
         return;
       case _DepositMethod.crypto:
@@ -66,21 +65,21 @@ class _DepositScreenState extends State<DepositScreen> {
           const SectionHeader(title: 'Deposit'),
           SizedBox(height: context.space.md),
           _buildMethodCard(
-            method: _DepositMethod.mobileMoney,
-            title: 'Mobile Money',
-            subtitle: 'MTN, Vodafone, AirtelTigo',
-            icon: Icons.phone_android_rounded,
-            color: context.colors.primary,
-            badge: 'Fastest',
-          ),
-          SizedBox(height: context.space.sm),
-          _buildMethodCard(
             method: _DepositMethod.crypto,
             title: 'Crypto',
             subtitle: 'BTC, ETH, USDT',
             icon: Icons.currency_bitcoin_rounded,
             color: Colors.orange,
             badge: 'Live',
+          ),
+          SizedBox(height: context.space.sm),
+          _buildMethodCard(
+            method: _DepositMethod.mobileMoney,
+            title: 'Mobile Money',
+            subtitle: 'Coming soon',
+            icon: Icons.phone_android_rounded,
+            color: context.colors.primary,
+            badge: 'Soon',
           ),
           SizedBox(height: context.space.sm),
           _buildMethodCard(
@@ -98,7 +97,7 @@ class _DepositScreenState extends State<DepositScreen> {
           SizedBox(height: context.space.lg),
           PrimaryButton(
             expanded: true,
-            label: _selected == _DepositMethod.card ? 'Notify Me' : 'Continue',
+            label: _selected == _DepositMethod.crypto ? 'Continue' : 'Notify Me',
             icon: Icons.bolt_rounded,
             onPressed: _continue,
           ),

@@ -11,7 +11,8 @@ class TradesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const CasinoScaffold(
-      appBar: CasinoTopNav(title: 'Activity'),
+      useNarrowLayout: true,
+      appBar: CasinoTopNav(title: 'Trades'),
       bottomNavigationBar: SharedBottomNav(currentIndex: 1),
       body: PlaceholderPanel(
         icon: Icons.auto_graph,

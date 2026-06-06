@@ -208,6 +208,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _selectedCategory != 'Solo' && _selectedCategory != 'Featured';
 
     return CasinoScaffold(
+      useNarrowLayout: true,
       appBar: const CasinoTopNav(title: 'Glory Grid'),
       bottomNavigationBar: const SharedBottomNav(currentIndex: 0),
       maxContentWidth: 1120,
@@ -329,12 +330,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             final columns = _columnsForWidth(width);
-            final compactCards = columns == 1;
-            final aspectRatio = compactCards
-                ? 2.05
-                : columns >= 3
-                ? 0.92
-                : 0.82;
+            final aspectRatio = 0.75;
             return GridView.builder(
               itemCount: games.length,
               shrinkWrap: true,
@@ -363,7 +359,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   },
                   onPlayReal: game.onTap,
                   highlighted: game.mode == _GameMode.multiplayer,
-                  compact: compactCards,
+                  compact: false,
                 );
               },
             );
@@ -376,8 +372,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _columnsForWidth(double width) {
     if (width >= 1200) return 4;
     if (width >= 860) return 3;
-    if (width >= 560) return 2;
-    return 1;
+    return 2; // Mobile users also get 2 columns to keep cards vertical
   }
 
   Widget _buildMultiplayerSpotlight() {

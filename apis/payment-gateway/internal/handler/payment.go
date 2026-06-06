@@ -165,10 +165,41 @@ func (h *Handler) InitiateMoMoDeposit(c *fiber.Ctx) error {
 	}
 	log.Printf("[payments][deposit][%s] user=%s channel=%s amount=%.2f", clientRef, userID, body.Channel, amount)
 
+	// Initiate Flutterwave Mobile Money Charge
+	network := networkFromChannel(body.Channel)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	chargeResp, err := h.flutterClient.ChargeMobileMoney(ctx, flutterwave.MobileMoneyChargeRequest{
+		Reference:   clientRef,
+		Amount:      amount,
+		Currency:    h.cfg.MoMoDefaultCurrency,
+		Email:       fmt.Sprintf("%s@glorygrid.com", userID),
+		FullName:    "Glory Grid User",
+		PhoneNumber: body.Phone,
+		Network:     network,
+		Narration:   "Glory Grid Deposit",
+		CallbackURL: h.cfg.FlutterwaveChargeCallback,
+	}, clientRef)
+
+	if err != nil {
+		h.db.Collection("payment_events").UpdateOne(context.Background(),
+			bson.M{"_id": clientRef},
+			bson.M{"$set": bson.M{"status": "FAILED", "error": err.Error(), "updatedAt": time.Now()}},
+		)
+		log.Printf("[payments][deposit][%s] flutterwave charge failed: %v", clientRef, err)
+		return c.Status(http.StatusBadGateway).JSON(fiber.Map{"error": "could not initiate deposit with provider"})
+	}
+
+	h.db.Collection("payment_events").UpdateOne(context.Background(),
+		bson.M{"_id": clientRef},
+		bson.M{"$set": bson.M{"providerRef": chargeResp.FlwRef, "updatedAt": time.Now()}},
+	)
+
 	respBody := fiber.Map{
 		"reference": clientRef,
 		"status":    "PENDING",
-		"message":   "We have recorded your deposit request. We will manually verify it soon.",
+		"message":   "Deposit initiated. Please approve the prompt on your phone.",
 	}
 	return c.Status(http.StatusAccepted).JSON(respBody)
 }

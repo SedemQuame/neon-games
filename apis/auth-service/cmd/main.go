@@ -1015,7 +1015,11 @@ func upsertUserByFirebase(ctx context.Context, identity firebaseIdentity) (bson.
 		)
 		guestDisplayName := ""
 		if identity.IsGuest {
-			guestDisplayName = generateGuestDisplayName()
+			if identity.FullName != "" {
+				guestDisplayName = identity.FullName
+			} else {
+				guestDisplayName = generateGuestDisplayName()
+			}
 			username = guestUsername(guestDisplayName)
 		}
 		doc := bson.M{
@@ -1075,7 +1079,12 @@ func upsertUserByFirebase(ctx context.Context, identity firebaseIdentity) (bson.
 	username, _ := existing["username"].(string)
 	fullName, _ := existing["fullName"].(string)
 	if identity.IsGuest && shouldRefreshGuestName(username, fullName) {
-		guestDisplayName := generateGuestDisplayName()
+		guestDisplayName := ""
+		if identity.FullName != "" {
+			guestDisplayName = identity.FullName
+		} else {
+			guestDisplayName = generateGuestDisplayName()
+		}
 		setFields["username"] = guestUsername(guestDisplayName)
 		setFields["fullName"] = guestDisplayName
 	} else if strings.TrimSpace(username) == "" {

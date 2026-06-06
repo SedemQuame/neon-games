@@ -22,8 +22,15 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   _AuthProviderAction? _activeProvider;
   bool _redirecting = false;
+  final TextEditingController _nameController = TextEditingController();
 
   bool get _busy => _activeProvider != null;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -278,7 +285,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 SizedBox(height: context.space.sm),
                 Text(
-                  'Guest',
+                  'Anonymous',
                   style: context.type.bodyStrong.copyWith(
                     color: context.colors.textPrimary,
                     fontWeight: FontWeight.w800,
@@ -287,10 +294,48 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 SizedBox(height: context.space.xxs),
                 Text(
-                  'No signup.',
+                  'No signup. Just enter a name.',
                   style: context.type.body.copyWith(
                     color: context.colors.textSecondary,
                     height: 1.35,
+                  ),
+                ),
+                SizedBox(height: context.space.sm),
+                TextField(
+                  controller: _nameController,
+                  style: context.type.bodyStrong.copyWith(
+                    color: context.colors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Enter your name (optional)',
+                    hintStyle: context.type.body.copyWith(
+                      color: context.colors.textSecondary,
+                    ),
+                    filled: true,
+                    fillColor: Colors.black12,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: context.space.md,
+                      vertical: context.space.sm,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(context.radii.md),
+                      borderSide: BorderSide(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(context.radii.md),
+                      borderSide: BorderSide(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(context.radii.md),
+                      borderSide: BorderSide(
+                        color: AppTheme.primaryColor,
+                      ),
+                    ),
                   ),
                 ),
                 SizedBox(height: context.space.md),
@@ -380,7 +425,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _signInAsGuest() {
     return _runAction(_AuthProviderAction.guest, () async {
-      await context.read<SessionManager>().startGuestMode();
+      await context.read<SessionManager>().startGuestMode(displayName: _nameController.text);
     });
   }
 
@@ -392,9 +437,14 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
+    // Start the authentication flow immediately to preserve the browser's 
+    // transient user activation (user gesture), preventing popup blockers 
+    // from silently blocking or hanging the sign-in window on web.
+    final authFuture = fn();
+
     setState(() => _activeProvider = action);
     try {
-      await fn();
+      await authFuture;
       if (!mounted) {
         return;
       }

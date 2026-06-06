@@ -27,7 +27,11 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = context.watch<SessionManager>();
     return CasinoScaffold(
-      appBar: CasinoTopNav(title: 'Settings', showBackButton: showBackButton),
+      useNarrowLayout: true,
+      appBar: CasinoTopNav(
+        title: isProfileTab ? 'Profile' : 'Settings',
+        showBackButton: showBackButton,
+      ),
       bottomNavigationBar: isProfileTab
           ? const SharedBottomNav(currentIndex: 3)
           : null,

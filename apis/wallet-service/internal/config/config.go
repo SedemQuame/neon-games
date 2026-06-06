@@ -33,7 +33,7 @@ func Load() *Config {
 		AppEnv:             getEnv("APP_ENV", "development"),
 		JWTPublicKeyPath:   getEnv("JWT_PUBLIC_KEY_PATH", ""),
 		JWTIssuer:          getEnv("JWT_ISSUER", "gamehub-auth"),
-		StartingBalanceUsd: getEnvFloat("STARTING_BALANCE_USD", 100),
+		StartingBalanceUsd: getEnvFloat("STARTING_BALANCE_USD", 0.0),
 	}
 	return cfg
 }
