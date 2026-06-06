@@ -81,11 +81,15 @@ class _MiniRouletteScreenState extends State<MiniRouletteScreen>
     _startSpinTicker();
 
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(_stakeUsd)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
       showGameMessage(context, 'Demo round. Wallet unchanged.');
       await Future<void>.delayed(const Duration(milliseconds: 950));
       if (!mounted || !_isSpinning) return;
-      onGameResult(
-        buildDemoGameResult(
+      final demoRes = buildDemoGameResult(
           gameType: mode == _RouletteBetMode.color
               ? 'DUAL_DIMENSION_FLIP'
               : 'DIGIT_DASH',
@@ -93,8 +97,11 @@ class _MiniRouletteScreenState extends State<MiniRouletteScreen>
           payoutMultiplier: mode == _RouletteBetMode.color ? 1.95 : 10.0,
           winChance: mode == _RouletteBetMode.color ? 0.49 : 0.10,
           rng: _rng,
-        ),
-      );
+        );
+      if (demoRes.winAmountUsd > 0) {
+        context.read<SessionManager>().addDemoWinnings(demoRes.winAmountUsd);
+      }
+      onGameResult(demoRes);
       return;
     }
 

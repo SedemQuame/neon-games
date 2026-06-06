@@ -43,9 +43,11 @@ class SessionManager extends ChangeNotifier {
   static const _sessionKey = 'gamehub.session';
   static const _rememberMeKey = 'gamehub.rememberMe';
   static const _legacyRememberedEmailKey = 'gamehub.rememberedEmail';
+  static const _demoBalanceKey = 'gamehub.demoBalance';
 
   AuthSession? _session;
   WalletBalance? _cachedBalance;
+  double _demoBalance = 1000.0;
   bool _rememberMe = false;
   bool _initialized = false;
   Timer? _balancePoller;
@@ -53,6 +55,7 @@ class SessionManager extends ChangeNotifier {
   AuthSession? get session => _session;
   bool get isAuthenticated => _session != null;
   WalletBalance? get cachedBalance => _cachedBalance;
+  double get demoBalance => _demoBalance;
   bool get rememberMe => _rememberMe;
   bool get isReady => _initialized;
 
@@ -226,6 +229,7 @@ class SessionManager extends ChangeNotifier {
   Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     _rememberMe = prefs.getBool(_rememberMeKey) ?? false;
+    _demoBalance = prefs.getDouble(_demoBalanceKey) ?? 1000.0;
     if (_rememberMe) {
       await _restoreSession();
     }
@@ -306,6 +310,33 @@ class SessionManager extends ChangeNotifier {
       }
       unawaited(_refreshBalanceSilently());
     });
+  }
+
+  bool deductDemoBalance(double amount) {
+    if (_demoBalance >= amount) {
+      _demoBalance -= amount;
+      _saveDemoBalance();
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  void addDemoWinnings(double amount) {
+    _demoBalance += amount;
+    _saveDemoBalance();
+    notifyListeners();
+  }
+
+  void refillDemoWallet(double amount) {
+    _demoBalance = amount;
+    _saveDemoBalance();
+    notifyListeners();
+  }
+
+  Future<void> _saveDemoBalance() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_demoBalanceKey, _demoBalance);
   }
 
   Future<void> _refreshBalanceSilently() async {

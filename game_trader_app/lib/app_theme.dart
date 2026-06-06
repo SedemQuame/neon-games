@@ -154,8 +154,8 @@ class AppTheme {
     bgCard: Color(0xFF1A2C38),
     textPrimary: Color(0xFFEAECEF),
     textSecondary: Color(0xFFB1BAD3),
-    primary: Color(0xFF00E701),
-    success: Color(0xFF00E701),
+    primary: Color(0xFFFCD535),
+    success: Color(0xFFFCD535),
     warning: Color(0xFFFCD535),
     danger: Color(0xFFF6465D),
     navBackground: Color(0xFF0F212E),
@@ -189,7 +189,7 @@ class AppTheme {
   static const bgCard = Color(0xFF1A2C38);
   static const navBackground = Color(0xFF0F212E);
   static const navForeground = Color(0xFFEAECEF);
-  static const success = Color(0xFF00E701);
+  static const success = Color(0xFFFCD535);
   static const warning = Color(0xFFFCD535);
   static const danger = Color(0xFFF6465D);
 

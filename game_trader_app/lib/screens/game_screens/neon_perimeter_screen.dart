@@ -104,6 +104,11 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
     };
 
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(_stakeUsd)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
       _startAnimation();
       showGameMessage(context, 'Demo range. Wallet unchanged.');
       await Future<void>.delayed(const Duration(milliseconds: 1400));

@@ -88,6 +88,16 @@ class _AviatorBoomCrashScreenState extends State<AviatorBoomCrashScreen>
     _startFlightTicker();
 
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(stakeAmount)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        _stopFlightTicker();
+        setState(() {
+          _isPlacing = false;
+          _isFlying = false;
+        });
+        return;
+      }
       setState(() {
         _isPlacing = false;
         _statusMessage = 'Land before the crash';
@@ -213,8 +223,11 @@ class _AviatorBoomCrashScreenState extends State<AviatorBoomCrashScreen>
         newBalance: 0,
         traceId: 'demo-$id',
         derivContractId: win ? 'DEMO_LANDED' : 'DEMO_CRASH',
-      ),
-    );
+      );
+      if (win) {
+        context.read<SessionManager>().addDemoWinnings(result.winAmountUsd);
+      }
+      onGameResult(result);
   }
 
   void _startFlightTicker() {

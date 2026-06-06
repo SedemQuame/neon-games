@@ -174,6 +174,11 @@ class _LootBoxPoolScreenState extends State<LootBoxPoolScreen> {
       _status = 'Locking 20 seats and filling the loot pot...';
     });
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(_stakeUsd)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
       showGameMessage(context, 'Demo pot. Wallet unchanged.');
     }
 
@@ -205,6 +210,10 @@ class _LootBoxPoolScreenState extends State<LootBoxPoolScreen> {
           ? 'Win: ${formatCurrency(outcome.userPayout)} from prize pool.'
           : 'No payout this round. Try a different number.',
     );
+
+    if (_playMode.isDemo && outcome.userPayout > 0) {
+      context.read<SessionManager>().addDemoWinnings(outcome.userPayout);
+    }
   }
 
   _LootPoolOutcome _simulateRound({

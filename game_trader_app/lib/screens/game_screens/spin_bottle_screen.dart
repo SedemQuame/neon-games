@@ -70,7 +70,25 @@ class _SpinBottleScreenState extends State<SpinBottleScreen> {
       _lastSoloNet = null;
     });
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(_stakeUsd)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
       showGameMessage(context, 'Demo spin. Wallet unchanged.');
+      await Future<void>.delayed(const Duration(milliseconds: 1400));
+      if (!mounted) return;
+      final demoRes = buildDemoGameResult(
+        gameType: 'SPIN_BOTTLE',
+        stakeUsd: _stakeUsd,
+        payoutMultiplier: 1.85,
+        winChance: 0.48,
+      );
+      if (demoRes.winAmountUsd > 0) {
+        context.read<SessionManager>().addDemoWinnings(demoRes.winAmountUsd);
+      }
+      _handleGameResult(demoRes);
+      return;
     }
 
     final targetSide = _randomOutcome();

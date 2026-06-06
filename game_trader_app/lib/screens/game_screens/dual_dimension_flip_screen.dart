@@ -105,6 +105,11 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
     });
 
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(stakeAmount)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
       setState(() {
         _isPlacing = false;
         _statusMessage = 'Demo round running...';
@@ -113,14 +118,16 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
       showGameMessage(context, 'Demo round. Wallet unchanged.');
       await Future<void>.delayed(const Duration(milliseconds: 950));
       if (!mounted || gamePhase != GamePhase.shuffling) return;
-      onGameResult(
-        buildDemoGameResult(
+      final demoRes = buildDemoGameResult(
           gameType: 'DUAL_DIMENSION_FLIP',
           stakeUsd: stakeAmount,
           payoutMultiplier: 1.95,
           winChance: 0.49,
-        ),
-      );
+        );
+      if (demoRes.winAmountUsd > 0) {
+        context.read<SessionManager>().addDemoWinnings(demoRes.winAmountUsd);
+      }
+      onGameResult(demoRes);
       return;
     }
 

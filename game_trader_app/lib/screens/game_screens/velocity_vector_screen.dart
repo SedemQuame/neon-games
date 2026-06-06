@@ -409,17 +409,24 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
     });
 
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(stakeAmount)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
       showGameMessage(context, 'Demo vector. Wallet unchanged.');
       await Future<void>.delayed(const Duration(milliseconds: 900));
       if (!mounted || !_isExecuting) return;
-      onGameResult(
-        buildDemoGameResult(
+      final demoRes = buildDemoGameResult(
           gameType: 'VELOCITY_VECTOR',
           stakeUsd: stakeAmount,
           payoutMultiplier: command == 'LAND' ? 2.5 : 2.2,
           winChance: command == 'LAND' ? 0.42 : 0.46,
-        ),
-      );
+        );
+      if (demoRes.winAmountUsd > 0) {
+        context.read<SessionManager>().addDemoWinnings(demoRes.winAmountUsd);
+      }
+      onGameResult(demoRes);
       return;
     }
 

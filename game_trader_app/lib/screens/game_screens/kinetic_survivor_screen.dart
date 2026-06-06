@@ -419,6 +419,11 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
         _activeMode = mode;
       });
       if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(stakeAmount)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
         setState(() {
           _status = 'Demo mission running...';
           _isSimulating = true;
@@ -427,15 +432,17 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
         showGameMessage(context, 'Demo mission. Wallet unchanged.');
         await Future<void>.delayed(const Duration(milliseconds: 1100));
         if (!mounted || !_isSimulating) return;
-        onGameResult(
-          buildDemoGameResult(
+        final demoRes = buildDemoGameResult(
             gameType: 'KINETIC_SURVIVOR',
             stakeUsd: stakeAmount,
             payoutMultiplier: 2.1,
             winChance: 0.46,
             rng: _rng,
-          ),
-        );
+          );
+      if (demoRes.winAmountUsd > 0) {
+        context.read<SessionManager>().addDemoWinnings(demoRes.winAmountUsd);
+      }
+      onGameResult(demoRes);
         return;
       }
       final ack = await placeGameBet(

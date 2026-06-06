@@ -575,7 +575,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       runSpacing: context.space.xs,
                       children: [
                         _LivePill(label: liveLabel),
-                        const _LivePill(label: 'Live Wallet'),
                       ],
                     ),
                   ],

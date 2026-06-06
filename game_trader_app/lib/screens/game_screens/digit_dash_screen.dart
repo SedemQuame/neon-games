@@ -440,19 +440,26 @@ class _DigitDashScreenState extends State<DigitDashScreen>
     _wheelTicker?.cancel();
 
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(stakeAmount)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
       setState(() => _status = 'Demo spin...');
       _startWheelLoop();
       showGameMessage(context, 'Demo spin. Wallet unchanged.');
       await Future<void>.delayed(const Duration(milliseconds: 950));
       if (!mounted || !_isSpinning) return;
-      onGameResult(
-        buildDemoGameResult(
+      final demoRes = buildDemoGameResult(
           gameType: 'DIGIT_DASH',
           stakeUsd: stakeAmount,
           payoutMultiplier: matchMode ? 10.0 : 1.10,
           winChance: matchMode ? 0.10 : 0.90,
-        ),
-      );
+        );
+      if (demoRes.winAmountUsd > 0) {
+        context.read<SessionManager>().addDemoWinnings(demoRes.winAmountUsd);
+      }
+      onGameResult(demoRes);
       return;
     }
 

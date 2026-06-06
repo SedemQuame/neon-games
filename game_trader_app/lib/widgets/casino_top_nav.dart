@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_theme.dart';
+import 'wallet_nav_display.dart';
 
 class CasinoTopNav extends StatelessWidget implements PreferredSizeWidget {
   const CasinoTopNav({
@@ -13,6 +14,7 @@ class CasinoTopNav extends StatelessWidget implements PreferredSizeWidget {
     this.centerTitle = false,
     this.onBack,
     this.showBackButton = false,
+    this.showWallets = true,
   });
 
   final String? title;
@@ -21,6 +23,7 @@ class CasinoTopNav extends StatelessWidget implements PreferredSizeWidget {
   final bool centerTitle;
   final VoidCallback? onBack;
   final bool showBackButton;
+  final bool showWallets;
 
   Future<void> _openExternal(String url) async {
     try {
@@ -59,7 +62,10 @@ class CasinoTopNav extends StatelessWidget implements PreferredSizeWidget {
                   onPressed: onBack ?? () => Navigator.of(context).maybePop(),
                 )
               : null),
-      actions: actions,
+      actions: [
+        if (showWallets) const WalletNavDisplay(),
+        ...?actions,
+      ],
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       flexibleSpace: Container(

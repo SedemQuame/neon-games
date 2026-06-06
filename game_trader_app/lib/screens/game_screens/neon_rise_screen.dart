@@ -505,17 +505,32 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
     });
 
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(stakeAmount)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(stakeAmount)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
+      setState(() => _statusMessage = 'Demo signal running...');
       showGameMessage(context, 'Demo signal. Wallet unchanged.');
-      await Future<void>.delayed(const Duration(milliseconds: 900));
-      if (!mounted || !_isPlacing) return;
-      onGameResult(
-        buildDemoGameResult(
+      
+      Future.delayed(const Duration(milliseconds: 900), () {
+        if (!mounted || !_isPlacing) return;
+        final result = buildDemoGameResult(
           gameType: 'NEON_RISE',
           stakeUsd: stakeAmount,
           payoutMultiplier: 1.95,
           winChance: 0.49,
-        ),
-      );
+        );
+        if (result.winAmountUsd > 0) {
+          context.read<SessionManager>().addDemoWinnings(result.winAmountUsd);
+        }
+        onGameResult(result);
+      });
       return;
     }
 

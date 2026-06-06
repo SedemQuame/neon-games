@@ -548,6 +548,12 @@ class _MultiplayerArenaScreenState extends State<MultiplayerArenaScreen> {
     final stake = _stakeUsd < _selected.minStake
         ? _selected.minStake
         : _stakeUsd;
+    final session = context.read<SessionManager>();
+    if (!session.deductDemoBalance(stake)) {
+      showGameMessage(context, 'Insufficient demo balance.');
+      return;
+    }
+
     setState(() {
       _stakeUsd = stake;
       _demoResolving = true;
@@ -626,20 +632,27 @@ class _MultiplayerArenaScreenState extends State<MultiplayerArenaScreen> {
       _demoRpsComputerPick = rpsComputerPick;
       _demoResult = result;
       _demoStatus = tied
-          ? 'Demo tie. Wallet unchanged.'
+          ? 'Demo tie. Stake returned.'
           : won
           ? 'Demo win ${formatCurrency(net)}.'
-          : 'Demo loss. Wallet unchanged.';
+          : 'Demo loss.';
     });
+    
+    if (tied) {
+      context.read<SessionManager>().addDemoWinnings(stake);
+    } else if (won && payout > 0) {
+      context.read<SessionManager>().addDemoWinnings(payout);
+    }
+
     final settledMessage = isRpsDemo && rpsComputerPick != null
         ? 'Demo round settled. Computer picked $rpsComputerPick.'
-        : 'Demo round settled. Wallet unchanged.';
+        : 'Demo round settled.';
     showGameMessage(
       context,
       tied
-          ? 'Demo tie. Computer picked $rpsComputerPick.'
+          ? 'Demo tie. Computer picked $rpsComputerPick. Stake returned.'
           : won
-          ? 'Demo win: ${formatCurrency(payout)} payout shown.'
+          ? 'Demo win: ${formatCurrency(payout)} payout.'
           : settledMessage,
     );
   }

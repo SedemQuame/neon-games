@@ -497,17 +497,24 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
     });
 
     if (_playMode.isDemo) {
+      final session = context.read<SessionManager>();
+      if (!session.deductDemoBalance(stakeAmount)) {
+        showGameMessage(context, 'Insufficient demo balance.');
+        return;
+      }
       showGameMessage(context, 'Demo order. Wallet unchanged.');
       await Future<void>.delayed(const Duration(milliseconds: 900));
       if (!mounted || !_isPlacing) return;
-      onGameResult(
-        buildDemoGameResult(
+      final demoRes = buildDemoGameResult(
           gameType: 'EDGE_RUNNER',
           stakeUsd: stakeAmount,
           payoutMultiplier: 3.5,
           winChance: 0.36,
-        ),
-      );
+        );
+      if (demoRes.winAmountUsd > 0) {
+        context.read<SessionManager>().addDemoWinnings(demoRes.winAmountUsd);
+      }
+      onGameResult(demoRes);
       return;
     }
 
