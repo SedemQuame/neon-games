@@ -18,8 +18,9 @@ class ApiClient {
     'GAMEHUB_BASE_URL',
     defaultValue: '',
   );
-  static const String _defaultBaseUrl =
-      'https://neon-games-production.up.railway.app';
+  static const String _defaultBaseUrl = kDebugMode
+      ? 'http://127.0.0.1'
+      : 'https://neon-games-production.up.railway.app';
 
   Uri _buildUri(String path, [Map<String, dynamic>? query]) {
     final normalizedPath = path.startsWith('/')

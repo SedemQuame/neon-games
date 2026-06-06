@@ -10,23 +10,29 @@ class GameCardTile extends StatefulWidget {
     required this.title,
     required this.subtitle,
     required this.imagePath,
-    required this.onTap,
+    this.onTap,
+    this.onPlayDemo,
+    this.onPlayReal,
     this.tag,
     this.minStake,
     this.highlighted = false,
     this.compact = false,
     this.aspectRatio,
+    this.playersCount = 0,
   });
 
   final String title;
   final String subtitle;
   final String imagePath;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final VoidCallback? onPlayDemo;
+  final VoidCallback? onPlayReal;
   final String? tag;
   final num? minStake;
   final bool highlighted;
   final bool compact;
   final double? aspectRatio;
+  final int playersCount;
 
   @override
   State<GameCardTile> createState() => _GameCardTileState();
@@ -41,121 +47,103 @@ class _GameCardTileState extends State<GameCardTile> {
     final colors = context.colors;
     final highlightBorder = widget.highlighted
         ? colors.primary.withValues(alpha: 0.65)
-        : colors.border;
+        : colors.border.withValues(alpha: 0.2); // Subtle border
     final cardShadows = context.elevation.card;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          scale: _pressed ? 0.985 : 1,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(context.radii.lg),
-              onTap: widget.onTap,
-              onHighlightChanged: (value) => setState(() => _pressed = value),
-              child: Ink(
-                decoration: BoxDecoration(
-                  color: colors.bgCard,
-                  borderRadius: BorderRadius.circular(context.radii.lg),
-                  border: Border.all(color: highlightBorder),
-                  boxShadow: cardShadows,
+    if (widget.compact) {
+      return MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            scale: _pressed ? 0.985 : 1,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(context.radii.lg),
+                onTap: widget.onTap,
+                onHighlightChanged: (value) => setState(() => _pressed = value),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    color: colors.bgCard,
+                    borderRadius: BorderRadius.circular(context.radii.lg),
+                    border: Border.all(color: highlightBorder),
+                    boxShadow: cardShadows,
+                  ),
+                  child: _CompactGameCardContent(widget: widget, isHovered: _hovered),
                 ),
-                child: widget.compact
-                    ? _CompactGameCardContent(widget: widget, isHovered: _hovered)
-                    : _StackedGameCardContent(widget: widget, isHovered: _hovered),
               ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
+      );
+    }
 
-class _StackedGameCardContent extends StatelessWidget {
-  const _StackedGameCardContent({required this.widget, required this.isHovered});
-
-  final GameCardTile widget;
-  final bool isHovered;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(context.radii.lg),
-          ),
-          child: AspectRatio(
-            aspectRatio: widget.aspectRatio ?? (3 / 4),
-            child: _GameImageStack(widget: widget, showTag: true, isHovered: isHovered),
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.all(context.space.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.type.bodyStrong.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      widget.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.type.label.copyWith(
-                        color: colors.textSecondary,
-                        fontWeight: FontWeight.w500,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                scale: _pressed ? 0.985 : 1,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(context.radii.lg),
+                    onTap: widget.onTap,
+                    onHighlightChanged: (value) => setState(() => _pressed = value),
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        color: colors.bgCard,
+                        borderRadius: BorderRadius.circular(context.radii.lg),
+                        border: Border.all(color: highlightBorder),
+                        boxShadow: cardShadows,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(context.radii.lg),
+                        child: _GameImageStack(widget: widget, showTag: true, isHovered: _hovered),
                       ),
                     ),
                   ),
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppTheme.success,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '10k+',
-                    style: context.type.label.copyWith(
-                      color: colors.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
+                ),
               ),
-              if (widget.minStake != null) ...[
-                SizedBox(height: context.space.sm),
-                PriceLabel(value: widget.minStake),
-              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppTheme.success,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${widget.playersCount} playing',
+                style: context.type.label.copyWith(
+                  color: colors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -246,54 +234,105 @@ class _GameImageStack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
 
     return Stack(
       fit: StackFit.expand,
       children: [
         Image.asset(widget.imagePath, fit: BoxFit.cover),
+        
+        // Title overlay (gradient at the bottom)
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Container(
+            padding: EdgeInsets.fromLTRB(
+              context.space.md, 
+              context.space.xl, 
+              context.space.md, 
+              context.space.md,
+            ),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.0),
+                  Colors.black.withValues(alpha: 0.85),
+                ],
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.type.bodyStrong.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+                if (widget.minStake != null) ...[
+                  const SizedBox(height: 2),
+                  PriceLabel(value: widget.minStake),
+                ],
+              ],
+            ),
+          ),
+        ),
+
+        // Hover dark overlay
         AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          color: Colors.black.withValues(alpha: isHovered ? 0.4 : 0.0),
+          color: Colors.black.withValues(alpha: isHovered ? 0.65 : 0.0),
         ),
+
+        // Hover buttons
         if (isHovered)
           Center(
-             child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.primaryColor,
-                ),
-                child: const Icon(Icons.play_arrow, color: AppTheme.goldText),
-             ),
-           ),
-        if (widget.highlighted && showTag)
-          Positioned(
-            right: context.space.xs,
-            bottom: context.space.xs,
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: context.space.xs,
-                vertical: context.space.xxs,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.56),
-                borderRadius: BorderRadius.circular(context.radii.pill),
-                border: Border.all(
-                  color: colors.primary.withValues(alpha: 0.5),
-                ),
-              ),
-              child: Text(
-                'ROOM PLAY',
-                style: context.type.label.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 10,
-                  letterSpacing: 0,
-                ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: context.space.sm),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (widget.onPlayDemo != null || widget.onTap != null) ...[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: widget.onPlayDemo ?? widget.onTap,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 0),
+                          backgroundColor: Colors.black.withValues(alpha: 0.6),
+                          foregroundColor: Colors.white,
+                          side: BorderSide(color: Colors.white.withValues(alpha: 0.7)),
+                        ),
+                        child: const Text('Fun Play', style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                    if (widget.onPlayReal != null || widget.onTap != null)
+                      const SizedBox(width: 8),
+                  ],
+                  if (widget.onPlayReal != null || widget.onTap != null)
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: widget.onPlayReal ?? widget.onTap,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 0),
+                          backgroundColor: AppTheme.primaryColor,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Real Play', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
+
+        // Top badges
         if (widget.tag != null && showTag)
           Positioned(
             top: context.space.xs,

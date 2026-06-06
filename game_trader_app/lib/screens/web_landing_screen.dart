@@ -5,6 +5,7 @@ import '../app_theme.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/app_shell.dart';
 import '../widgets/casino_top_nav.dart';
+import '../widgets/game_card_tile.dart';
 import '../widgets/section_header.dart';
 import '../widgets/tag_badge.dart';
 import 'auth_screen.dart';
@@ -63,6 +64,29 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
       imagePath: 'assets/images/velocity_vector_bg.png',
       demoPlayable: true,
       gameScreen: VelocityVectorScreen(),
+    ),
+  ];
+
+  static const List<_GamePreview> _realGames = [
+    _GamePreview(
+      title: 'Target Strike',
+      tagline: 'Closest number.',
+      imagePath: 'assets/images/digit_dash_bg.png',
+    ),
+    _GamePreview(
+      title: 'Parity Clash',
+      tagline: 'Odd or even.',
+      imagePath: 'assets/images/dual_dimension_flip_bg.png',
+    ),
+    _GamePreview(
+      title: 'Dice Duel',
+      tagline: 'Highest roll.',
+      imagePath: 'assets/images/neon_rise_bg.png',
+    ),
+    _GamePreview(
+      title: 'Secret Bid',
+      tagline: 'Unique bid.',
+      imagePath: 'assets/images/neon_perimeter_bg.png',
     ),
   ];
 
@@ -209,13 +233,15 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
         final right = _buildHeroVisual(context);
 
         if (wide) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(flex: 11, child: left),
-              SizedBox(width: context.space.lg),
-              Expanded(flex: 9, child: right),
-            ],
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(flex: 11, child: left),
+                SizedBox(width: context.space.lg),
+                Expanded(flex: 9, child: right),
+              ],
+            ),
           );
         }
 
@@ -447,56 +473,70 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
   }
 
   Widget _buildGamesSection(BuildContext context) {
+    final allGames = [..._soloGames, ..._realGames];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: 'Games'),
+        const SectionHeader(title: 'Available games'),
         SizedBox(height: context.space.sm),
         Text(
-          'Play solo demos instantly. Live lobby titles shown below require guest access or SSO to enter.',
+          'Pick a game below. Solo demos are ready to play, while real matches require guest access or sign-in.',
           style: context.type.body.copyWith(
             color: context.colors.textSecondary,
             height: 1.5,
           ),
         ),
         SizedBox(height: context.space.md),
-        _buildGameCategoryRow(
-          context,
-          label: 'SOLO DEMOS',
-          games: _soloGames,
+        Wrap(
+          spacing: context.space.sm,
+          runSpacing: context.space.sm,
+          children: const [
+            _HeroChip(label: 'Play demo'),
+            _HeroChip(label: 'Play real'),
+            _HeroChip(label: 'Guest play'),
+          ],
         ),
         SizedBox(height: context.space.lg),
-        _buildGameCategoryRow(
-          context,
-          label: 'LOBBY GAMES',
-          games: const [
-            _GamePreview(
-              title: 'Target Strike',
-              tagline: 'Closest number.',
-              imagePath: 'assets/images/digit_dash_bg.png',
-            ),
-            _GamePreview(
-              title: 'Parity Clash',
-              tagline: 'Odd or even.',
-              imagePath: 'assets/images/dual_dimension_flip_bg.png',
-            ),
-            _GamePreview(
-              title: 'Dice Duel',
-              tagline: 'Highest roll.',
-              imagePath: 'assets/images/neon_rise_bg.png',
-            ),
-            _GamePreview(
-              title: 'Secret Bid',
-              tagline: 'Unique bid.',
-              imagePath: 'assets/images/neon_perimeter_bg.png',
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final crossAxisCount = constraints.maxWidth >= 1200
+                ? 4
+                : constraints.maxWidth >= 840
+                    ? 3
+                    : constraints.maxWidth >= 620
+                        ? 2
+                        : 1;
+            final itemWidth = (constraints.maxWidth - context.space.sm * (crossAxisCount - 1)) / crossAxisCount;
+
+            return Wrap(
+              spacing: context.space.sm,
+              runSpacing: context.space.sm,
+              children: allGames.map((game) {
+                return SizedBox(
+                  width: itemWidth,
+                  child: GameCardTile(
+                    title: game.title,
+                    subtitle: game.tagline,
+                    imagePath: game.imagePath,
+                    tag: game.demoPlayable ? 'PLAY DEMO' : 'PLAY REAL',
+                    minStake: game.demoPlayable ? null : 0.01,
+                    highlighted: !game.demoPlayable,
+                    onPlayDemo: game.demoPlayable && game.gameScreen != null 
+                        ? () => _launchGame(context, game) 
+                        : null,
+                    onPlayReal: () => _openAuth(context),
+                  ),
+                );
+              }).toList(),
+            );
+          },
         ),
         SizedBox(height: context.space.lg),
         Center(
           child: PrimaryButton(
-            label: 'Open lobby',
-            onPressed: () => _openAuth(context),
+            label: 'Browse all games',
+            onPressed: () => _scrollTo(_gamesKey),
           ),
         ),
         SizedBox(height: context.space.lg),
@@ -505,144 +545,6 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
     );
   }
 
-  Widget _buildGameCategoryRow(
-    BuildContext context, {
-    required String label,
-    required List<_GamePreview> games,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          margin: EdgeInsets.only(bottom: context.space.sm),
-          padding: EdgeInsets.symmetric(
-            horizontal: context.space.sm,
-            vertical: context.space.xxs,
-          ),
-          decoration: BoxDecoration(
-            color: AppTheme.primaryColor,
-            borderRadius: BorderRadius.circular(context.radii.pill),
-          ),
-          child: Text(
-            label,
-            style: context.type.label.copyWith(
-              color: AppTheme.goldText,
-              fontWeight: FontWeight.w900,
-              fontSize: 11,
-              letterSpacing: 0,
-            ),
-          ),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final crossAxisCount = constraints.maxWidth >= 1040
-                ? 4
-                : constraints.maxWidth >= 680
-                ? 2
-                : 1;
-            final itemWidth =
-                (constraints.maxWidth -
-                    context.space.sm * (crossAxisCount - 1)) /
-                crossAxisCount;
-
-            return Wrap(
-              spacing: context.space.sm,
-              runSpacing: context.space.sm,
-              children: games
-                  .map(
-                    (g) => SizedBox(
-                      width: itemWidth,
-                      child: _gamePreviewCard(context, g),
-                    ),
-                  )
-                  .toList(),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _gamePreviewCard(BuildContext context, _GamePreview game) {
-    return SurfaceCard(
-      padding: EdgeInsets.zero,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(context.radii.lg),
-        child: Stack(
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(game.imagePath, fit: BoxFit.cover),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.82),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              top: context.space.sm,
-              left: context.space.sm,
-              child: TagBadge(
-                label: game.demoPlayable ? 'DEMO' : 'LOBBY',
-                backgroundColor: AppTheme.backgroundDark,
-                foregroundColor: AppTheme.primaryColor,
-              ),
-            ),
-            Positioned(
-              left: context.space.sm,
-              right: context.space.sm,
-              bottom: context.space.sm,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    game.title,
-                    style: context.type.bodyStrong.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  SizedBox(height: context.space.xxs),
-                  Text(
-                    game.tagline,
-                    style: context.type.label.copyWith(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      height: 1.3,
-                    ),
-                  ),
-                  SizedBox(height: context.space.sm),
-                  if (game.demoPlayable)
-                    PrimaryButton(
-                      expanded: true,
-                      label: 'Play demo',
-                      onPressed: () => _launchGame(context, game),
-                    )
-                  else
-                    SecondaryButton(
-                      expanded: true,
-                      label: 'Sign in',
-                      onPressed: () => _openAuth(context),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildLiveFeedSection(BuildContext context) {
     return Column(

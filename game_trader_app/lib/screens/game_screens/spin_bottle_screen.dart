@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../widgets/game_scaffold.dart';
+import '../../services/session_manager.dart';
+import 'package:provider/provider.dart';
 
 import '../../app_theme.dart';
 import '../../utils/balance_guard.dart';
@@ -216,9 +219,29 @@ class _SpinBottleScreenState extends State<SpinBottleScreen> {
     );
   }
 
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<SessionManager>().gameService.viewGame('spin_bottle');
+      }
+    });
+  }
+
+
+  @override
+  void dispose() {
+    if (mounted) {
+      context.read<SessionManager>().gameService.leaveGame();
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GameScaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: GameActivityAppBar(
         title: _isMultiplayer ? 'Spin the Bottle (Multi)' : 'Spin the Bottle',

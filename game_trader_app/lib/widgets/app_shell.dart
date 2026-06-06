@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
-import 'sidebar_nav.dart';
 
 class CasinoScaffold extends StatelessWidget {
   const CasinoScaffold({
@@ -27,47 +26,37 @@ class CasinoScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 800;
+    final effectiveMaxWidth = isDesktop ? screenWidth * 0.4 : screenWidth * 0.9;
+
     return Scaffold(
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       backgroundColor: context.colors.bgApp,
       appBar: appBar,
       floatingActionButton: floatingActionButton,
-      bottomNavigationBar: bottomNavigationBar,
+      bottomNavigationBar: bottomNavigationBar != null
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: effectiveMaxWidth,
+                  child: bottomNavigationBar,
+                ),
+              ],
+            )
+          : null,
       body: DecoratedBox(
         decoration: const BoxDecoration(color: AppTheme.backgroundDark),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final horizontal = _responsiveHorizontalPadding(
-              constraints.maxWidth,
-            );
-            final contentWidth = constraints.maxWidth > maxContentWidth
-                ? maxContentWidth
-                : constraints.maxWidth;
-            final content = Padding(
-              padding:
-                  bodyPadding ?? EdgeInsets.symmetric(horizontal: horizontal),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: effectiveMaxWidth,
+            child: Padding(
+              padding: bodyPadding ?? EdgeInsets.symmetric(horizontal: AppTheme.spacing.md),
               child: body,
-            );
-
-            final mainBody = !constrainBody
-                ? content
-                : Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox(width: contentWidth, child: content),
-                  );
-            
-            if (constraints.maxWidth >= 1040) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SidebarNav(),
-                  Expanded(child: mainBody),
-                ],
-              );
-            }
-
-            return mainBody;
-          },
+            ),
+          ),
         ),
       ),
     );

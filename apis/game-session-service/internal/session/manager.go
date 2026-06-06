@@ -35,6 +35,9 @@ type Manager struct {
 	roomsMu   sync.RWMutex
 	rooms     map[string]*multiplayerRoom
 	userRooms map[string]string
+
+	viewingMu   sync.RWMutex
+	viewingGame map[string]string // map[userID]gameKey
 }
 
 type PlaceBetRequest struct {
@@ -79,6 +82,7 @@ func NewManager(db *mongo.Database, rdb *redis.Client, walletClient *wallet.Clie
 		subscribers: make(map[string]map[chan []byte]struct{}),
 		rooms:       make(map[string]*multiplayerRoom),
 		userRooms:   make(map[string]string),
+		viewingGame: make(map[string]string),
 	}
 }
 
@@ -374,4 +378,30 @@ func (m *Manager) refundStaleSessions(ctx context.Context) {
 		m.persistOutcome(context.Background(), outcome)
 		m.broadcast(userID, wsMessage("GAME_RESULT", outcome))
 	}
+}
+
+func (m *Manager) ViewGame(userID string, gameKey string) {
+	if gameKey == "" {
+		return
+	}
+	m.viewingMu.Lock()
+	defer m.viewingMu.Unlock()
+	m.viewingGame[userID] = gameKey
+}
+
+func (m *Manager) LeaveGame(userID string) {
+	m.viewingMu.Lock()
+	defer m.viewingMu.Unlock()
+	delete(m.viewingGame, userID)
+}
+
+func (m *Manager) GetGameStats() map[string]int {
+	m.viewingMu.RLock()
+	defer m.viewingMu.RUnlock()
+	
+	stats := make(map[string]int)
+	for _, gameKey := range m.viewingGame {
+		stats[gameKey]++
+	}
+	return stats
 }

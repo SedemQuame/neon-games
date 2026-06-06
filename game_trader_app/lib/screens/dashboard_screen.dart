@@ -39,6 +39,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   StreamSubscription<GameEvent>? _gameEventsSub;
   Timer? _liveStatsTimer;
   int? _livePlayers;
+  Map<String, int> _gameStats = {};
   bool _loadingBalance = false;
   bool _showAllGames = false;
   bool _handledInitialArenaLink = false;
@@ -70,15 +71,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _handleGameEvent(GameEvent event) {
     int? livePlayers;
+    Map<String, int>? gameStats;
     if (event is LiveStatsEvent) {
       livePlayers = event.livePlayers;
+      gameStats = event.gameStats;
     } else if (event is GameConnectedEvent) {
       livePlayers = event.livePlayers ?? 1;
     }
     if (livePlayers == null || !mounted) {
       return;
     }
-    setState(() => _livePlayers = livePlayers);
+    setState(() {
+      _livePlayers = livePlayers;
+      if (gameStats != null) {
+        _gameStats = gameStats;
+      }
+    });
   }
 
   Future<void> _refreshLiveStats() async {
@@ -345,7 +353,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   imagePath: game.image,
                   tag: game.tag,
                   minStake: game.minStake,
-                  onTap: game.onTap,
+                  playersCount: game.playersCount,
+                  onPlayDemo: () {
+                    // Demo mode from dashboard
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Demo mode starting...')),
+                    );
+                    game.onTap();
+                  },
+                  onPlayReal: game.onTap,
                   highlighted: game.mode == _GameMode.multiplayer,
                   compact: compactCards,
                 );
@@ -592,6 +608,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         image: 'assets/images/neon_rise_bg.png',
         tag: 'FEATURED',
         minStake: 1,
+        playersCount: _gameStats['neon_rise'] ?? 0,
         mode: _GameMode.solo,
         onTap: () {
           _openActivity(const NeonRiseScreen());
@@ -603,6 +620,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         image: 'assets/images/digit_dash_bg.png',
         tag: 'POPULAR',
         minStake: 1,
+        playersCount: _gameStats['digit_dash'] ?? 0,
         mode: _GameMode.solo,
         onTap: () {
           _openActivity(const DigitDashScreen());
@@ -614,6 +632,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         image: 'assets/images/screen_14.png',
         tag: 'NEW',
         minStake: 1,
+        playersCount: _gameStats['mini_roulette'] ?? 0,
         mode: _GameMode.solo,
         onTap: () {
           _openActivity(const MiniRouletteScreen());
@@ -625,6 +644,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         image: 'assets/images/dual_dimension_flip_bg.png',
         tag: 'NEW',
         minStake: 1,
+        playersCount: _gameStats['dual_dimension_flip'] ?? 0,
         mode: _GameMode.solo,
         onTap: () {
           _openActivity(const DualDimensionFlipScreen());
@@ -636,6 +656,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         image: 'assets/images/velocity_vector_bg.png',
         tag: 'HOT',
         minStake: 2,
+        playersCount: _gameStats['velocity_vector'] ?? 0,
         mode: _GameMode.solo,
         onTap: () {
           _openActivity(const VelocityVectorScreen());
@@ -647,6 +668,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         image: 'assets/images/neon_perimeter_bg.png',
         tag: 'TRENDING',
         minStake: 1,
+        playersCount: _gameStats['neon_perimeter'] ?? 0,
         mode: _GameMode.solo,
         onTap: () {
           _openActivity(const NeonPerimeterScreen());
@@ -658,6 +680,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         image: 'assets/images/screen_11.png',
         tag: 'TRENDING',
         minStake: 1,
+        playersCount: _gameStats['aviator_boom_crash'] ?? 0,
         mode: _GameMode.solo,
         onTap: () {
           _openActivity(const AviatorBoomCrashScreen());
@@ -669,6 +692,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         image: 'assets/images/screen_12.png',
         tag: 'NEW',
         minStake: 1,
+        playersCount: _gameStats['spin_bottle'] ?? 0,
         mode: _GameMode.solo,
         onTap: () {
           _openActivity(const SpinBottleScreen.solo());
@@ -685,6 +709,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       image: game.imagePath,
       tag: game.cardTag,
       minStake: game.minStake,
+      playersCount: _gameStats[game.key] ?? 0,
       mode: _GameMode.multiplayer,
       onTap: () {
         _openMultiplayerGame(game.key);
@@ -702,6 +727,7 @@ class _GameConfig {
     required this.image,
     required this.tag,
     required this.minStake,
+    this.playersCount = 0,
     required this.mode,
     required this.onTap,
   });
@@ -711,6 +737,7 @@ class _GameConfig {
   final String image;
   final String tag;
   final num minStake;
+  final int playersCount;
   final _GameMode mode;
   final VoidCallback onTap;
 }

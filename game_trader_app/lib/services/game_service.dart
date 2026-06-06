@@ -205,11 +205,19 @@ class GameService {
 
   void requestLiveStats() {
     if (_liveStatsUnsupported) {
-      _events.add(const LiveStatsEvent(livePlayers: 1));
+      _events.add(const LiveStatsEvent(livePlayers: 1, gameStats: {}));
       return;
     }
     _liveStatsRequestPending = true;
     safeSend(const {'type': 'GET_LIVE_STATS'});
+  }
+
+  void viewGame(String gameKey) {
+    safeSend({'type': 'VIEW_GAME', 'gameKey': gameKey});
+  }
+
+  void leaveGame() {
+    safeSend(const {'type': 'LEAVE_GAME'});
   }
 
   void kickRoomPlayer(String targetUserId) {
@@ -362,8 +370,15 @@ class GameService {
           _liveStatsRequestPending = false;
           final payload =
               decoded['payload'] as Map<String, dynamic>? ?? const {};
+          final gameStatsRaw = payload['gameStats'] as Map? ?? {};
+          final gameStats = <String, int>{};
+          for (final key in gameStatsRaw.keys) {
+            gameStats[key.toString()] =
+                (gameStatsRaw[key] as num?)?.toInt() ?? 0;
+          }
           event = LiveStatsEvent(
             livePlayers: (payload['livePlayers'] as num?)?.toInt() ?? 0,
+            gameStats: gameStats,
           );
           emitEvent = true;
           break;
@@ -442,7 +457,7 @@ class GameService {
               msg.toLowerCase().contains('unknown message type')) {
             _liveStatsRequestPending = false;
             _liveStatsUnsupported = true;
-            event = const LiveStatsEvent(livePlayers: 1);
+            event = const LiveStatsEvent(livePlayers: 1, gameStats: {});
             emitEvent = true;
             break;
           }
@@ -514,8 +529,10 @@ class GameConnectedEvent extends GameEvent {
 }
 
 class LiveStatsEvent extends GameEvent {
-  const LiveStatsEvent({required this.livePlayers}) : super('LIVE_STATS');
+  const LiveStatsEvent({required this.livePlayers, required this.gameStats})
+    : super('LIVE_STATS');
   final int livePlayers;
+  final Map<String, int> gameStats;
 }
 
 class GameBetAccepted extends GameEvent {

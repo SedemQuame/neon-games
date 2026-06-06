@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../widgets/game_scaffold.dart';
+import '../../services/session_manager.dart';
+import 'package:provider/provider.dart';
 
 import '../../app_theme.dart';
 import '../../services/game_service.dart';
@@ -39,13 +42,27 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
 
   @override
   void dispose() {
+    if (mounted) {
+      context.read<SessionManager>().gameService.leaveGame();
+    }
     _ballTicker?.cancel();
     super.dispose();
   }
 
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<SessionManager>().gameService.viewGame('kinetic_survivor');
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GameScaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Kinetic Survivor'),
       bottomNavigationBar: PlayModeBottomBar(

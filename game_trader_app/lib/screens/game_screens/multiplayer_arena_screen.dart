@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../widgets/game_scaffold.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_theme.dart';
@@ -1657,7 +1658,7 @@ class _MultiplayerArenaScreenState extends State<MultiplayerArenaScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GameScaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: GameActivityAppBar(title: _selected.title),
       bottomNavigationBar: _room == null ? _buildBottomPlayModeBar() : null,

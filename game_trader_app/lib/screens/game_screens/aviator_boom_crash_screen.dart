@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../widgets/game_scaffold.dart';
+import '../../services/session_manager.dart';
+import 'package:provider/provider.dart';
 
 import '../../app_theme.dart';
 import '../../services/game_service.dart';
@@ -55,6 +58,9 @@ class _AviatorBoomCrashScreenState extends State<AviatorBoomCrashScreen>
 
   @override
   void dispose() {
+    if (mounted) {
+      context.read<SessionManager>().gameService.leaveGame();
+    }
     _demoCrashTimer?.cancel();
     _stopFlightTicker();
     super.dispose();
@@ -298,9 +304,20 @@ class _AviatorBoomCrashScreenState extends State<AviatorBoomCrashScreen>
     showGameMessage(context, event.message);
   }
 
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<SessionManager>().gameService.viewGame('aviator_boom_crash');
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GameScaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Aviator Boom/Crash'),
       bottomNavigationBar: PlayModeBottomBar(

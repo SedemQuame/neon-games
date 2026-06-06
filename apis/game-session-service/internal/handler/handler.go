@@ -91,6 +91,7 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 
 	events, unsubscribe := h.mgr.Subscribe(userID)
 	defer unsubscribe()
+	defer h.mgr.LeaveGame(userID)
 
 	conn.WriteJSON(fiber.Map{
 		"type":        "CONNECTED",
@@ -212,6 +213,7 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 				"type": "LIVE_STATS",
 				"payload": fiber.Map{
 					"livePlayers": h.mgr.LivePlayerCount(),
+					"gameStats":   h.mgr.GetGameStats(),
 				},
 			})
 		case "JOIN_ROOM":
@@ -326,6 +328,15 @@ func (h *Handler) HandleWebSocket(conn *websocket.Conn) {
 			conn.WriteJSON(fiber.Map{"type": "ROOM_STATE", "payload": snapshot})
 		case "PING":
 			conn.WriteJSON(fiber.Map{"type": "PONG"})
+		case "VIEW_GAME":
+			var req struct {
+				GameKey string `json:"gameKey"`
+			}
+			if err := json.Unmarshal(data, &req); err == nil {
+				h.mgr.ViewGame(userID, req.GameKey)
+			}
+		case "LEAVE_GAME":
+			h.mgr.LeaveGame(userID)
 		default:
 			conn.WriteJSON(fiber.Map{"type": "ERROR", "message": "unknown message type"})
 		}

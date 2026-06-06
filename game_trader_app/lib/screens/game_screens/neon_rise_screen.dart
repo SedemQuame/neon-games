@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../widgets/game_scaffold.dart';
+import '../../services/session_manager.dart';
+import 'package:provider/provider.dart';
 
 import '../../app_theme.dart';
 import '../../services/game_service.dart';
@@ -30,9 +33,29 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
   String _statusMessage = 'Choose direction';
   String? _activeDirection;
 
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<SessionManager>().gameService.viewGame('neon_rise');
+      }
+    });
+  }
+
+
+  @override
+  void dispose() {
+    if (mounted) {
+      context.read<SessionManager>().gameService.leaveGame();
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GameScaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Neon Rise'),
       bottomNavigationBar: PlayModeBottomBar(

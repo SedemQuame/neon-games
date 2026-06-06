@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../widgets/game_scaffold.dart';
+import '../../services/session_manager.dart';
+import 'package:provider/provider.dart';
 
 import '../../app_theme.dart';
 import '../../services/game_service.dart';
@@ -48,6 +51,9 @@ class _MiniRouletteScreenState extends State<MiniRouletteScreen>
 
   @override
   void dispose() {
+    if (mounted) {
+      context.read<SessionManager>().gameService.leaveGame();
+    }
     _stopSpinTicker();
     super.dispose();
   }
@@ -256,9 +262,20 @@ class _MiniRouletteScreenState extends State<MiniRouletteScreen>
     showGameMessage(context, event.message);
   }
 
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<SessionManager>().gameService.viewGame('mini_roulette');
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GameScaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Mini Roulette'),
       bottomNavigationBar: PlayModeBottomBar(

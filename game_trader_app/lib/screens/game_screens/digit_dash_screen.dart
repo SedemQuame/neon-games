@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../../widgets/game_scaffold.dart';
+import '../../services/session_manager.dart';
+import 'package:provider/provider.dart';
 
 import '../../app_theme.dart';
 import '../../services/game_service.dart';
@@ -41,6 +44,11 @@ class _DigitDashScreenState extends State<DigitDashScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<SessionManager>().gameService.viewGame('digit_dash');
+      }
+    });
     _settleController =
         AnimationController(
           vsync: this,
@@ -69,6 +77,9 @@ class _DigitDashScreenState extends State<DigitDashScreen>
 
   @override
   void dispose() {
+    if (mounted) {
+      context.read<SessionManager>().gameService.leaveGame();
+    }
     _wheelTicker?.cancel();
     _settleController.dispose();
     _flashController.dispose();
@@ -77,7 +88,7 @@ class _DigitDashScreenState extends State<DigitDashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GameScaffold(
       backgroundColor: AppTheme.gameBackground,
       appBar: const GameActivityAppBar(title: 'Digit Dash'),
       bottomNavigationBar: PlayModeBottomBar(
