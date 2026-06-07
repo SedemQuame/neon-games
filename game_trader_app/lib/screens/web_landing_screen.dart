@@ -10,8 +10,8 @@ import '../widgets/section_header.dart';
 import '../widgets/tag_badge.dart';
 import 'auth_screen.dart';
 import 'game_screens/digit_dash_screen.dart';
+import 'game_screens/dual_dimension_flip_screen.dart';
 import 'game_screens/neon_perimeter_screen.dart';
-import 'game_screens/neon_rise_screen.dart';
 import 'game_screens/velocity_vector_screen.dart';
 
 class WebLandingScreen extends StatefulWidget {
@@ -38,11 +38,11 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
 
   static const List<_GamePreview> _soloGames = [
     _GamePreview(
-      title: 'Neon Rise',
-      tagline: 'Market direction.',
-      imagePath: 'assets/images/neon_rise_bg.png',
+      title: 'Even or Odd',
+      tagline: 'Odd or even.',
+      imagePath: 'assets/images/dual_dimension_flip_bg.png',
       demoPlayable: true,
-      gameScreen: NeonRiseScreen(),
+      gameScreen: DualDimensionFlipScreen(),
     ),
     _GamePreview(
       title: 'Digit Dash',
@@ -589,7 +589,7 @@ class _WebLandingScreenState extends State<WebLandingScreen> {
               SizedBox(height: context.space.md),
               Column(
                 children: [
-                  _feedRow(context, 'Neon Rise', '+3.2%', 'WIN'),
+                  _feedRow(context, 'Even or Odd', '+3.2%', 'WIN'),
                   SizedBox(height: context.space.sm),
                   _feedRow(context, 'Parity Clash', '-1.8%', 'LOSS'),
                   SizedBox(height: context.space.sm),
