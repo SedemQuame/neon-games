@@ -68,9 +68,6 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     _gameSubscription?.cancel();
     _pulseController.dispose();
     super.dispose();
@@ -114,15 +111,17 @@ class _NeonPerimeterScreenState extends State<NeonPerimeterScreen>
       await Future<void>.delayed(const Duration(milliseconds: 1400));
       if (!mounted || !_isPlaying) return;
       _stopAnimation();
-      _showResultDialog(
-        buildDemoGameResult(
-          gameType: 'NEON_PERIMETER',
-          stakeUsd: _stakeUsd,
-          payoutMultiplier: 1.85,
-          winChance: 0.48,
-          rng: _rng,
-        ),
+      final demoRes = buildDemoGameResult(
+        gameType: 'NEON_PERIMETER',
+        stakeUsd: _stakeUsd,
+        payoutMultiplier: 1.85,
+        winChance: 0.48,
+        rng: _rng,
       );
+      if (demoRes.payoutUsd > 0) {
+        context.read<SessionManager>().addDemoWinnings(demoRes.payoutUsd);
+      }
+      _showResultDialog(demoRes);
       return;
     }
 

@@ -245,9 +245,6 @@ class _SpinBottleScreenState extends State<SpinBottleScreen> {
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     super.dispose();
   }
 

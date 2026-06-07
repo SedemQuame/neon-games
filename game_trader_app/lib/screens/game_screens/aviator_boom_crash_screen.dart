@@ -58,9 +58,6 @@ class _AviatorBoomCrashScreenState extends State<AviatorBoomCrashScreen>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     _demoCrashTimer?.cancel();
     _stopFlightTicker();
     super.dispose();
@@ -224,7 +221,7 @@ class _AviatorBoomCrashScreenState extends State<AviatorBoomCrashScreen>
       derivContractId: win ? 'DEMO_LANDED' : 'DEMO_CRASH',
     );
     if (win) {
-      context.read<SessionManager>().addDemoWinnings(result.winAmountUsd);
+      context.read<SessionManager>().addDemoWinnings(payoutUsd);
     }
     onGameResult(result);
   }

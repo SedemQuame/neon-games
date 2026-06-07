@@ -77,9 +77,6 @@ class _DigitDashScreenState extends State<DigitDashScreen>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     _wheelTicker?.cancel();
     _settleController.dispose();
     _flashController.dispose();

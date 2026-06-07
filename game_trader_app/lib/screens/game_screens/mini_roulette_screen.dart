@@ -51,9 +51,6 @@ class _MiniRouletteScreenState extends State<MiniRouletteScreen>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     _stopSpinTicker();
     super.dispose();
   }

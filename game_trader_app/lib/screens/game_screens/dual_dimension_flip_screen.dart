@@ -76,9 +76,6 @@ class _DualDimensionFlipScreenState extends State<DualDimensionFlipScreen>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     _pulseController.dispose();
     _overlayController.dispose();
     _shuffleTimer?.cancel();

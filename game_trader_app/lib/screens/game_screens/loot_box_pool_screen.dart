@@ -969,9 +969,6 @@ class _FlashingWinningBoxState extends State<_FlashingWinningBox>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     _controller.dispose();
     super.dispose();
   }

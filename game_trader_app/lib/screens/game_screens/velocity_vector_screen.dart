@@ -43,9 +43,6 @@ class _VelocityVectorScreenState extends State<VelocityVectorScreen>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     super.dispose();
   }
 

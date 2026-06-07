@@ -42,9 +42,6 @@ class _KineticSurvivorScreenState extends State<KineticSurvivorScreen>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     _ballTicker?.cancel();
     super.dispose();
   }

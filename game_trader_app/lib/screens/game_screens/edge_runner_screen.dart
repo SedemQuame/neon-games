@@ -47,9 +47,6 @@ class _EdgeRunnerScreenState extends State<EdgeRunnerScreen>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     super.dispose();
   }
 

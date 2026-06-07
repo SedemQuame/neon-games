@@ -47,9 +47,6 @@ class _NeonRiseScreenState extends State<NeonRiseScreen>
 
   @override
   void dispose() {
-    if (mounted) {
-      context.read<SessionManager>().gameService.leaveGame();
-    }
     super.dispose();
   }
 
