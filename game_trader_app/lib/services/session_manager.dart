@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'api_client.dart';
 import 'app_logger.dart';
 import 'auth_service.dart';
@@ -54,6 +56,7 @@ class SessionManager extends ChangeNotifier {
 
   AuthSession? get session => _session;
   bool get isAuthenticated => _session != null;
+  bool get isAnonymous => _firebaseAuth.isAnonymous;
   WalletBalance? get cachedBalance => _cachedBalance;
   double get demoBalance => _demoBalance;
   bool get rememberMe => _rememberMe;
@@ -110,13 +113,13 @@ class SessionManager extends ChangeNotifier {
 
   Future<void> linkGoogleAccount() async {
     final idToken = await _firebaseAuth.linkWithGoogle();
-    final session = await _auth.login(idToken: idToken);
+    final session = await _auth.loginWithFirebaseIdToken(idToken: idToken);
     await _openSession(session, suppressBalanceErrors: false);
   }
 
   Future<void> linkAppleAccount() async {
     final idToken = await _firebaseAuth.linkWithApple();
-    final session = await _auth.login(idToken: idToken);
+    final session = await _auth.loginWithFirebaseIdToken(idToken: idToken);
     await _openSession(session, suppressBalanceErrors: false);
   }
 

@@ -159,8 +159,8 @@ class SettingsScreen extends StatelessWidget {
       final shouldLogout = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          backgroundColor: context.colors.surface,
-          title: Text('Guest Account', style: context.type.h4.copyWith(color: context.colors.text)),
+          backgroundColor: context.colors.bgSurface,
+          title: Text('Guest Account', style: context.type.sectionTitle.copyWith(color: context.colors.textPrimary)),
           content: Text(
             'You are playing anonymously. If you log out now, your balance and game history will be permanently lost.',
             style: context.type.body.copyWith(color: context.colors.textSecondary),
@@ -176,7 +176,7 @@ class SettingsScreen extends StatelessWidget {
                 _showLinkAccountDialog(context, session);
               },
               style: ElevatedButton.styleFrom(backgroundColor: context.colors.primary),
-              child: Text('Link Account', style: context.type.label.copyWith(color: context.colors.background)),
+              child: Text('Link Account', style: context.type.label.copyWith(color: context.colors.bgApp)),
             ),
           ],
         ),
@@ -200,7 +200,7 @@ class SettingsScreen extends StatelessWidget {
   void _showLinkAccountDialog(BuildContext context, SessionManager session) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: context.colors.surface,
+      backgroundColor: context.colors.bgSurface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => SafeArea(
         child: Padding(
@@ -209,7 +209,7 @@ class SettingsScreen extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Link Account', style: context.type.h4.copyWith(color: context.colors.text), textAlign: TextAlign.center),
+              Text('Link Account', style: context.type.sectionTitle.copyWith(color: context.colors.textPrimary), textAlign: TextAlign.center),
               SizedBox(height: context.space.sm),
               Text('Secure your account to play across devices and save your balance.', style: context.type.body.copyWith(color: context.colors.textSecondary), textAlign: TextAlign.center),
               SizedBox(height: context.space.xl),
