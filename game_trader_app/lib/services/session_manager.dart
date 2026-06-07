@@ -50,7 +50,7 @@ class SessionManager extends ChangeNotifier {
   AuthSession? _session;
   WalletBalance? _cachedBalance;
   double _demoBalance = 1000.0;
-  bool _rememberMe = false;
+  bool _rememberMe = true;
   bool _initialized = false;
   Timer? _balancePoller;
 
@@ -271,7 +271,7 @@ class SessionManager extends ChangeNotifier {
 
   Future<void> _bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
-    _rememberMe = prefs.getBool(_rememberMeKey) ?? false;
+    _rememberMe = prefs.getBool(_rememberMeKey) ?? true;
     _demoBalance = prefs.getDouble(_demoBalanceKey) ?? 1000.0;
     if (_rememberMe) {
       await _restoreSession();
