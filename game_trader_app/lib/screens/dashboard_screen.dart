@@ -597,15 +597,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<_GameConfig> _games(BuildContext context) {
     return [
       _GameConfig(
-        title: 'Neon Rise',
-        subtitle: 'Market direction',
-        image: 'assets/images/neon_rise_bg.png',
-        tag: 'FEATURED',
+        title: 'Even or Odd',
+        subtitle: 'Odd or even',
+        image: 'assets/images/dual_dimension_flip_bg.png',
+        tag: 'NEW',
         minStake: 1,
-        playersCount: _gameStats['neon_rise'] ?? 0,
+        playersCount: _gameStats['dual_dimension_flip'] ?? 0,
         mode: _GameMode.solo,
         onTap: () {
-          _openActivity(const NeonRiseScreen());
+          _openActivity(const DualDimensionFlipScreen());
         },
       ),
       _GameConfig(
@@ -632,18 +632,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _openActivity(const MiniRouletteScreen());
         },
       ),
-      _GameConfig(
-        title: 'Even or Odd',
-        subtitle: 'Odd or even',
-        image: 'assets/images/dual_dimension_flip_bg.png',
-        tag: 'NEW',
-        minStake: 1,
-        playersCount: _gameStats['dual_dimension_flip'] ?? 0,
-        mode: _GameMode.solo,
-        onTap: () {
-          _openActivity(const DualDimensionFlipScreen());
-        },
-      ),
+
       _GameConfig(
         title: 'Velocity Vector',
         subtitle: 'Momentum',
