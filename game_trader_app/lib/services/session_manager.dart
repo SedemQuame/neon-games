@@ -108,6 +108,18 @@ class SessionManager extends ChangeNotifier {
     return _cachedBalance!;
   }
 
+  Future<void> linkGoogleAccount() async {
+    final idToken = await _firebaseAuth.linkWithGoogle();
+    final session = await _auth.login(idToken: idToken);
+    await _openSession(session, suppressBalanceErrors: false);
+  }
+
+  Future<void> linkAppleAccount() async {
+    final idToken = await _firebaseAuth.linkWithApple();
+    final session = await _auth.login(idToken: idToken);
+    await _openSession(session, suppressBalanceErrors: false);
+  }
+
   Future<void> logout() async {
     final refreshToken = _session?.refreshToken ?? '';
     if (refreshToken.isNotEmpty) {
@@ -120,15 +132,43 @@ class SessionManager extends ChangeNotifier {
     _session = null;
     _cachedBalance = null;
     await _game.disconnect();
+    final wasAnonymous = isAnonymous;
     try {
-      await _firebaseAuth.signOut();
+      if (!wasAnonymous) {
+        await _firebaseAuth.signOut();
+      }
     } catch (_) {
       // Ignore Firebase provider sign-out errors if session is already cleared.
     }
     await _secureStorage.delete(key: _sessionKey);
+    if (wasAnonymous) {
+      await _secureStorage.write(key: 'has_saved_guest_session', value: 'true');
+    } else {
+      await _secureStorage.delete(key: 'has_saved_guest_session');
+    }
     _balancePoller?.cancel();
     _balancePoller = null;
     notifyListeners();
+  }
+
+  Future<bool> hasSavedGuestSession() async {
+    final value = await _secureStorage.read(key: 'has_saved_guest_session');
+    return value == 'true';
+  }
+
+  Future<void> restoreGuestSession() async {
+    if (!isAnonymous) {
+      throw StateError('No active anonymous Firebase session to restore.');
+    }
+    // We cannot use _firebaseAuth.signInAnonymously() because it would create a NEW user.
+    // We rely on the existing FirebaseAuth.instance.currentUser being alive.
+    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken(true);
+    if (idToken == null) {
+      throw StateError('Failed to get Firebase ID token.');
+    }
+    final session = await _auth.loginWithFirebaseIdToken(idToken: idToken);
+    await _openSession(session, suppressBalanceErrors: false);
+    await _secureStorage.delete(key: 'has_saved_guest_session');
   }
 
   Future<void> ensureGameSocket() async {

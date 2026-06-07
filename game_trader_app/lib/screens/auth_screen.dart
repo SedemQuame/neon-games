@@ -22,9 +22,28 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   _AuthProviderAction? _activeProvider;
   bool _redirecting = false;
+  bool _hasSavedGuestSession = false;
   final TextEditingController _nameController = TextEditingController();
 
   bool get _busy => _activeProvider != null;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkSavedGuestSession();
+    });
+  }
+
+  Future<void> _checkSavedGuestSession() async {
+    final session = context.read<SessionManager>();
+    final hasSession = await session.hasSavedGuestSession();
+    if (mounted) {
+      setState(() {
+        _hasSavedGuestSession = hasSession;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -348,6 +367,19 @@ class _AuthScreenState extends State<AuthScreen> {
                       ? 'Signing in...'
                       : 'Enter Lobby',
                 ),
+                if (_hasSavedGuestSession) ...[
+                  SizedBox(height: context.space.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: (_busy || !sessionReady) ? null : _restoreGuestSession,
+                      child: Text(
+                        'Restore Previous Guest Account',
+                        style: context.type.bodyStrong.copyWith(color: AppTheme.primaryColor),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -459,9 +491,31 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (error) {
       _showError('Authentication failed: $error');
     } finally {
-      if (mounted && !_redirecting) {
-        setState(() => _activeProvider = null);
+      if (mounted) setState(() => _activeProvider = null);
+    }
+  }
+
+  Future<void> _restoreGuestSession() async {
+    if (_busy) return;
+    setState(() => _activeProvider = _AuthProviderAction.guest);
+
+    try {
+      final session = context.read<SessionManager>();
+      await session.restoreGuestSession();
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not restore session: $e')),
+        );
+        setState(() => _hasSavedGuestSession = false);
+      }
+    } finally {
+      if (mounted) setState(() => _activeProvider = null);
     }
   }
 

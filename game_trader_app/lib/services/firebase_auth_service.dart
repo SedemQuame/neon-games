@@ -12,6 +12,8 @@ class FirebaseAuthService {
 
   final FirebaseAuth _auth;
 
+  bool get isAnonymous => _auth.currentUser?.isAnonymous ?? false;
+
   Future<String> signInWithGoogle() async {
     if (kIsWeb) {
       final provider = GoogleAuthProvider()
@@ -28,6 +30,28 @@ class FirebaseAuthService {
         idToken: googleAuth.idToken,
       );
       final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      return _extractIdToken(userCredential);
+    }
+  }
+
+  Future<String> linkWithGoogle() async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('No user is currently signed in to link.');
+    if (kIsWeb) {
+      final provider = GoogleAuthProvider()
+        ..addScope('email')
+        ..setCustomParameters({'prompt': 'select_account'});
+      return _linkWithProvider(provider);
+    } else {
+      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance.authenticate();
+      if (googleUser == null) {
+        throw StateError('Google Sign-In cancelled by user.');
+      }
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+      final UserCredential userCredential = await user.linkWithCredential(credential);
       return _extractIdToken(userCredential);
     }
   }
@@ -58,6 +82,34 @@ class FirebaseAuthService {
     }
   }
 
+  Future<String> linkWithApple() async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('No user is currently signed in to link.');
+    if (kIsWeb) {
+      final provider = OAuthProvider('apple.com')
+        ..addScope('email')
+        ..addScope('name');
+      return _linkWithProvider(provider);
+    } else {
+      final AuthorizationCredentialAppleID appleCredential =
+          await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final OAuthProvider provider = OAuthProvider('apple.com');
+      final AuthCredential credential = provider.credential(
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
+
+      final UserCredential userCredential = await user.linkWithCredential(credential);
+      return _extractIdToken(userCredential);
+    }
+  }
+
   Future<String> signInWithX() {
     final provider = TwitterAuthProvider();
     return _signInWithProvider(provider);
@@ -83,6 +135,15 @@ class FirebaseAuthService {
     final UserCredential credential = kIsWeb
         ? await _auth.signInWithPopup(provider)
         : await _auth.signInWithProvider(provider);
+    return _extractIdToken(credential);
+  }
+
+  Future<String> _linkWithProvider(AuthProvider provider) async {
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('No user is currently signed in to link.');
+    final UserCredential credential = kIsWeb
+        ? await user.linkWithPopup(provider)
+        : await user.linkWithProvider(provider);
     return _extractIdToken(credential);
   }
 

@@ -155,6 +155,38 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _handleLogout(BuildContext context) async {
     final session = context.read<SessionManager>();
+    if (session.isAnonymous) {
+      final shouldLogout = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: context.colors.surface,
+          title: Text('Guest Account', style: context.type.h4.copyWith(color: context.colors.text)),
+          content: Text(
+            'You are playing anonymously. If you log out now, your balance and game history will be permanently lost.',
+            style: context.type.body.copyWith(color: context.colors.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('Logout Anyway', style: context.type.label.copyWith(color: context.colors.danger)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+                _showLinkAccountDialog(context, session);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: context.colors.primary),
+              child: Text('Link Account', style: context.type.label.copyWith(color: context.colors.background)),
+            ),
+          ],
+        ),
+      );
+      if (shouldLogout != true) return;
+    }
+    await _performLogout(context, session);
+  }
+
+  Future<void> _performLogout(BuildContext context, SessionManager session) async {
     await session.logout();
     if (!context.mounted) {
       return;
@@ -162,6 +194,70 @@ class SettingsScreen extends StatelessWidget {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const AuthScreen()),
       (route) => false,
+    );
+  }
+
+  void _showLinkAccountDialog(BuildContext context, SessionManager session) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: context.colors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(context.space.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Link Account', style: context.type.h4.copyWith(color: context.colors.text), textAlign: TextAlign.center),
+              SizedBox(height: context.space.sm),
+              Text('Secure your account to play across devices and save your balance.', style: context.type.body.copyWith(color: context.colors.textSecondary), textAlign: TextAlign.center),
+              SizedBox(height: context.space.xl),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  try {
+                    await session.linkGoogleAccount();
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      showGameMessage(context, 'Account successfully linked to Google!');
+                    }
+                  } catch (e) {
+                    if (context.mounted) showGameMessage(context, 'Failed to link account: $e');
+                  }
+                },
+                icon: const Icon(Icons.g_mobiledata),
+                label: const Text('Link with Google'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  padding: EdgeInsets.all(context.space.md),
+                ),
+              ),
+              SizedBox(height: context.space.md),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  try {
+                    await session.linkAppleAccount();
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      showGameMessage(context, 'Account successfully linked to Apple!');
+                    }
+                  } catch (e) {
+                    if (context.mounted) showGameMessage(context, 'Failed to link account: $e');
+                  }
+                },
+                icon: const Icon(Icons.apple),
+                label: const Text('Link with Apple'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.all(context.space.md),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
